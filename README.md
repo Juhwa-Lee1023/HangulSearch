@@ -47,13 +47,6 @@ let personSearch = HangulSearch(items: persons, mode: .autocomplete, keySelector
 
 ### 검색 모드별 사용 방법
 
-`HangulSearch` 라이브러리는 여러 검색 모드를 지원합니다.
-<br/>
-#### 사용된 데이터
-
-[테스트 데이터 JSON 파일](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/MockData/people.json)
-
-
 #### 1. 초성 검색 (`chosungAndFullMatch`)
 
 초성 검색 모드에서는 사용자가 입력한 초성에 해당하는 항목을 찾습니다. 예를 들어, "ㅊㅅ"을 검색하면 "철수"가 포함된 모든 이름을 찾을 수 있습니다.
@@ -84,6 +77,10 @@ let personSearch = HangulSearch(items: persons, mode: .autocomplete, keySelector
 
 #### 4. 결합 검색 모드 (combined)
 결합 검색 모드에서는 초성 검색, 전체 문자열 검색, 자동 완성 검색을 조합하여 더 넓은 범위의 검색 결과를 제공합니다. 이 모드는 다양한 입력 형태에 대해 가장 광범위한 검색 결과를 반환합니다.
+
+<br/>
+
+[사용된 데이터](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/MockData/people.json)
 
 <br/>
 
