@@ -56,9 +56,14 @@ let personSearch = HangulSearch(items: persons, mode: .autocomplete, keySelector
     let results = searchEngine?.searchItems(input: "ㅊㅅ")
     // results?.map { $0.name } = ["김철수", "이철수", "박철수", "최철수", "최성수", "최상욱", "정철수", "강철수", "초철수", "초성수", "초상욱", "윤철수", "장철수", "임철수"]
 ```
+<details>
+  <summary>클릭하여 동영상 보기</summary>
+
+https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/9f5e0f28-d8ab-4010-9b58-79eafb35b798
+
+</details>
 
 
-https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/7c32e81c-f6b5-4cfc-b37a-a8f81f4e2f67
 
 
 #### 2. 전체 문자열 검색 (containsMatch)
@@ -70,8 +75,17 @@ https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/7c32e81c-f6b5-4cfc
     // results?.map { $0.name } = ["김철수", "이철수", "박철수", "최철수", "정철수", "강철수", "초철수", "윤철수", "장철수", "임철수"]
 ```
 
+<details>
+  <summary>클릭하여 동영상 보기</summary>
 
-https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/717346a2-3d39-4049-91bf-00ed1721c0a1
+
+
+https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/8bdc8091-03d9-4c84-b56a-8f58cc5ef8f1
+
+
+
+</details>
+
 
 
 #### 3. 자동 완성 검색 (autocomplete)
@@ -82,16 +96,32 @@ https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/717346a2-3d39-4049
     let results = searchEngine?.searchItems(input: "쵳")
     // results?.map { $0.name } = ["최철수"]
 ```
+<details>
+  <summary>클릭하여 동영상 보기</summary>
 
 
-https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/761ad162-063e-4e6c-88b2-f272f51ec50e
+
+https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/d8d3693b-0dc0-49e9-8117-df131ec20154
+
+
+
+</details>
 
 
 #### 4. 종합 검색 모드 (combined)
 종합 검색 모드에서는 초성 검색, 전체 문자열 검색, 자동 완성 검색을 조합하여 더 넓은 범위의 검색 결과를 제공합니다. 이 모드는 다양한 입력 형태에 대해 가장 광범위한 검색 결과를 반환합니다.
 
+<details>
+  <summary>클릭하여 동영상 보기</summary>
 
-https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/d3295dcf-e72e-4fae-be18-31b31f840757
+
+https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/94652207-6896-488f-af8c-db273312becd
+
+
+
+
+</details>
+
 
 
 <br/>
