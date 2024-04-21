@@ -49,7 +49,7 @@ let personSearch = HangulSearch(items: persons, mode: .autocomplete, keySelector
 
 #### 1. 초성 검색 (`chosungAndFullMatch`)
 
-초성 검색 모드에서는 사용자가 입력한 초성에 해당하는 항목을 찾습니다. 예를 들어, "ㅊㅅ"을 검색하면 "철수"가 포함된 모든 이름을 찾을 수 있습니다.
+초성 검색 모드에서는 사용자가 입력한 초성에 해당하는 항목을 찾습니다. 예를 들어, "ㅊㅅ"을 검색하면 "ㅊㅅ" 초성을 가진 모든 결과를 찾을 수 있습니다.
 
 ```swift
     let searchEngine = HangulSearch(items: persons, mode: .chosungAndFullMatch, keySelector: { $0.name })
@@ -67,7 +67,7 @@ let personSearch = HangulSearch(items: persons, mode: .autocomplete, keySelector
 ```
 
 #### 3. 자동 완성 검색 (autocomplete)
-자동 완성 검색에서는 사용자가 입력한 문자열로 시작하는 항목을 찾습니다. 예를 들어, "쵳"으로 검색하면 "최철수"와 같은 이름을 찾을 수 있습니다.
+자동 완성 검색에서는 사용자가 입력한 문자열로 시작하는 항목을 찾습니다. 예를 들어, "쵳"으로 검색하면 "최철수"와 같은 결과를 얻을 수 있습니다.
 
 ```swift
     let searchEngine = HangulSearch(items: persons, mode: .autocomplete, keySelector: { $0.name })
