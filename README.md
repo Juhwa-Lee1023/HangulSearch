@@ -52,7 +52,7 @@ let personSearch = HangulSearch(items: persons, mode: .autocomplete, keySelector
 초성 검색 모드에서는 사용자가 입력한 초성에 해당하는 항목을 찾습니다. 예를 들어, "ㅊㅅ"을 검색하면 "철수"가 포함된 모든 이름을 찾을 수 있습니다.
 
 ```swift
-    let searchEngine = HangulSearch(items: persons, mode: .chosungAndFullMatch, keySelector: { $0 })
+    let searchEngine = HangulSearch(items: persons, mode: .chosungAndFullMatch, keySelector: { $0.name })
     let results = searchEngine?.searchItems(input: "ㅊㅅ")
     // results?.map { $0.name } = ["김철수", "이철수", "박철수", "최철수", "최성수", "최상욱", "정철수", "강철수", "초철수", "초성수", "초상욱", "윤철수", "장철수", "임철수"]
 ```
@@ -61,7 +61,7 @@ let personSearch = HangulSearch(items: persons, mode: .autocomplete, keySelector
 전체 문자열 검색에서는 입력된 전체 문자열을 포함하는 항목을 반환합니다. 예를 들어, "철수"라는 문자열을 검색하면 이름 중 "철수"를 포함하는 모든 결과를 반환합니다.
 
 ```swift
-    let searchEngine = HangulSearch(items: persons, mode: .containsMatch, keySelector: { $0 })
+    let searchEngine = HangulSearch(items: persons, mode: .containsMatch, keySelector: { $0.name })
     let results = searchEngine?.searchItems(input: "철수")
     // results?.map { $0.name } = ["김철수", "이철수", "박철수", "최철수", "정철수", "강철수", "초철수", "윤철수", "장철수", "임철수"]
 ```
@@ -70,12 +70,12 @@ let personSearch = HangulSearch(items: persons, mode: .autocomplete, keySelector
 자동 완성 검색에서는 사용자가 입력한 문자열로 시작하는 항목을 찾습니다. 예를 들어, "쵳"으로 검색하면 "최철수"와 같은 이름을 찾을 수 있습니다.
 
 ```swift
-    let searchEngine = HangulSearch(items: persons, mode: .autocomplete, keySelector: { $0 })
+    let searchEngine = HangulSearch(items: persons, mode: .autocomplete, keySelector: { $0.name })
     let results = searchEngine?.searchItems(input: "쵳")
     // results?.map { $0.name } = ["최철수"]
 ```
 
-#### 4. 결합 검색 모드 (combined)
+#### 4. 종합 검색 모드 (combined)
 결합 검색 모드에서는 초성 검색, 전체 문자열 검색, 자동 완성 검색을 조합하여 더 넓은 범위의 검색 결과를 제공합니다. 이 모드는 다양한 입력 형태에 대해 가장 광범위한 검색 결과를 반환합니다.
 
 <br/>
