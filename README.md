@@ -67,7 +67,7 @@ let personSearch = HangulSearch(items: persons, mode: .autocomplete, keySelector
 ```
 
 #### 3. 자동 완성 검색 (autocomplete)
-전체 문자열 검색에서는 입력된 전체 문자열을 포함하는 항목을 반환합니다. 예를 들어, "철수"라는 문자열을 검색하면 이름 중 "철수"를 포함하는 모든 결과를 반환합니다.
+자동 완성 검색에서는 사용자가 입력한 문자열로 시작하는 항목을 찾습니다. 예를 들어, "쵳"으로 검색하면 "최철수"와 같은 이름을 찾을 수 있습니다.
 
 ```swift
     let searchEngine = HangulSearch(items: persons, mode: .autocomplete, keySelector: { $0 })
