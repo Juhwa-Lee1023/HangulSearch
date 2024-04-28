@@ -1,5 +1,9 @@
 # HangulSearch
- 
+[![stability-beta](https://img.shields.io/badge/stability-beta-33bbff.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#beta)
+
+
+
+
 `KoreanSearch`는 다양한 방식의 한글 검색을 지원하는 스위프트 라이브러리입니다. 
 <br/>
 다양한 검색 모드를 활용하여 한글 텍스트 데이터에 대한 유연한 검색 기능을 구현할 수 있습니다.
