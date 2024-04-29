@@ -8,7 +8,7 @@ final class HangulSearchTests: XCTestCase {
         super.setUp()
         let itemDatas = JSONLoader().loadJSON(from: "people") ?? ""
         let items = JSONParser().parseJSON(itemDatas)
-        searchEngine = HangulSearch(items: items, mode: .combined, keySelector: { $0.name })
+        searchEngine = HangulSearch(items: items, searchMode: .combined, keySelector: { $0.name }, isEqual:  { $0.age == $1.age })
     }
     
     override func tearDown() {
@@ -46,5 +46,14 @@ final class HangulSearchTests: XCTestCase {
     func testEmptyInput() throws {
         let results = searchEngine?.searchItems(input: "")
         XCTAssertTrue(results?.isEmpty ?? false, "비어 있음")
+    }
+    
+    // 데이터 추가 후 검색 테스트
+    func testAddDataLogic() throws {
+        searchEngine?.addItems(items: [Person(name: "킴철수", age: 29), Person(name: "이철수", age: 29)])
+        let results = searchEngine?.searchItems(input: "철수")
+        let expectedNames = ["김철수", "이철수", "박철수", "최철수", "정철수", "강철수", "초철수", "윤철수", "장철수", "임철수", "킴철수", "이철수"]
+        let resultNames = results?.map { $0.name }
+        XCTAssertEqual(resultNames, expectedNames, "검색 성공")
     }
 }
