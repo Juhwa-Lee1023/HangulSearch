@@ -44,17 +44,25 @@ public class HangulSearch<T> {
     /// 검색을 수행할 선택자를 선택
     private var keySelector: (T) -> String
     
+    /// 추가적으로 비교를 실행할 선택자를 선택
+    private var isEqual: ((T, T) -> Bool)?
+    
     // MARK: Init
     /// - Parameters:
     ///   - items: 검색을 수행할 데이터의 배열
     ///   - searchMode: 한글 검색 모드. 기본값은 chosungAndFullMatch
     ///   - sortMode: 결과를 정렬하는 방식. 기본값은 .none
     ///   - keySelector: 각 항목에서 검색을 수행할 선택자를 선택하는 클로저
-    public init(items: [T], searchMode: HangulSearchMode = .chosungAndFullMatch, sortMode: SortMode = .none, keySelector: @escaping (T) -> String) {
+    ///   - isEqual: 두 항목 간의 keySelector 가 동일할 경우 추가적으로 비교를 실행할 선택자를 선택하는 클로저
+    ///              제공된 경우, 검색 결과에서 중복을 피하기 위해 사용됨
+    ///              keySelector: { $0.name },  // 'name'을 기준으로 비교
+    ///              isEqual: { $0.age == $1.age }  // 'age'를 추가로 비교
+    public init(items: [T], searchMode: HangulSearchMode = .chosungAndFullMatch, sortMode: SortMode = .none, keySelector: @escaping (T) -> String, isEqual: ((T, T) -> Bool)? = nil) {
         self.items = items
         self.searchMode = searchMode
         self.sortMode = sortMode
         self.keySelector = keySelector
+        self.isEqual = isEqual
         preprocessItems()
     }
     
@@ -100,6 +108,13 @@ public class HangulSearch<T> {
     /// - Parameter items: 새로운 항목의 배열
     public func changeItems(items: [T]) {
         self.items = items
+        preprocessItems()
+    }
+    
+    /// 검색을 수행할 데이터를 추가, 추가된 항목에 대해 사전 처리를 수행
+    /// - Parameter items: 추가할 항목의 배열
+    public func addItems(items: [T]) {
+        self.items.append(contentsOf: items)
         preprocessItems()
     }
     
@@ -211,28 +226,33 @@ extension HangulSearch {
     private func searchByCombined(input: String) -> [T] {
         var results = [T]()
         
+        // 중복 검사는 두 가지 방식으로 수행될 수 있음
+        // 1. 사용자가 `isEqual` 클로저를 제공한 경우: 이 클로저는 `keySelector` 결과와 추가적으로 비교를 위해 선언한 선택자를 이용해
+        //    두 객체가 일치하는지를 검사
+        // 2. 사용자가 `isEqual` 클로저를 제공하지 않은 경우: `keySelector`의 결과만을 사용하여 일치하는지 검사
+        //
+        // `isUnique` 변수는 주어진 아이템이 결과 배열에 이미 존재하는지 여부를 결정.
+        //  이 값이 `true`일 경우, 아이템은 결과 배열에 추가되고, `false`일 경우 추가되지 않음
+        let appendIfUnique: (T) -> Void = { item in
+            let isUnique: Bool
+            if let customIsEqual = self.isEqual {
+                isUnique = !results.contains { otherItem in
+                    self.keySelector(otherItem) == self.keySelector(item) && customIsEqual(otherItem, item)
+                }
+            } else {
+                isUnique = !results.contains(where: { self.keySelector($0) == self.keySelector(item) })
+            }
+            if isUnique {
+                results.append(item)
+            }
+        }
+        
         // 1. 완전 일치 검색 결과를 결과 배열에 추가
-        let containsMatches = searchByFullChar(input: input)
-        results.append(contentsOf: containsMatches)
-        
+        searchByFullChar(input: input).forEach(appendIfUnique)
         // 2. 초성 검색 또는 완전 일치 검색 결과를 결과 배열에 추가
-        let fullCharMatches = isPureChosung(input: input) ? searchByChosung(input: input) : searchByFullChar(input: input)
-        for match in fullCharMatches {
-            // 결과 배열에 중복된 항목이 없을 경우에만 추가
-            if !results.contains(where: { keySelector($0) == keySelector(match) }) {
-                results.append(match)
-            }
-        }
-        
+        (isPureChosung(input: input) ? searchByChosung(input: input) : searchByFullChar(input: input)).forEach(appendIfUnique)
         // 3. 자동 완성 검색 결과를 결과 배열에 추가
-        let autocompleteMatches = searchByAutocomplete(input: input)
-        for match in autocompleteMatches {
-            // 결과 배열에 중복된 항목이 없을 경우에만 추가
-            if !results.contains(where: { keySelector($0) == keySelector(match) }) {
-                results.append(match)
-            }
-        }
-        
+        searchByAutocomplete(input: input).forEach(appendIfUnique)
         return results
     }
     
