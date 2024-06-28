@@ -30,6 +30,8 @@ public class HangulSearch<T> {
     /// - hangulOrderReversed: 항목들을 한글 자모 역순으로 정렬
     /// - editDistance: 검색어와 항목 간의 편집 거리(레벤슈타인 거리)를 기준으로 항목을 정렬. 이 모드는
     ///   검색어와 가장 유사한 항목을 우선적으로 보여주어 사용자가 관련성 높은 결과를 빠르게 인지할 수 있도록 합니다.
+    /// - matchPosition: 항목 내에서 검색어가 나타나는 위치를 기준으로 정렬. 검색어가 항목 내에서 더 앞에 나타날수록
+    ///   해당 항목이 우선적으로 정렬됩니다.
     /// - none: 정렬을 수행하지 않습니다.
     private var sortMode: SortMode
     
@@ -97,6 +99,8 @@ public class HangulSearch<T> {
             results = sortItemsByHangulOrderReversed(items: results)
         case .editDistance:
             results = sortItemsByEditDistance(to: input, items: results)
+        case .matchPosition:
+            results = sortItemsByMatchPosition(input: input, items: results)
         case .none:
             break
         }
@@ -366,6 +370,19 @@ extension HangulSearch {
         }
         
         return distanceMatrix[m][n]
+    }
+    
+    /// 입력 문자열과 일치하는 위치를 기준으로 항목을 정렬
+    /// - Parameters:
+    ///   - input: 검색어
+    ///   - items: 정렬할 항목 배열
+    /// - Returns: 일치하는 위치를 기준으로 정렬된 항목 배열
+    private func sortItemsByMatchPosition(input: String, items: [T]) -> [T] {
+        return items.sorted {
+            let indexA = keySelector($0).range(of: input)?.lowerBound.utf16Offset(in: keySelector($0)) ?? Int.max
+            let indexB = keySelector($1).range(of: input)?.lowerBound.utf16Offset(in: keySelector($1)) ?? Int.max
+            return indexA < indexB
+        }
     }
     
 }

@@ -11,5 +11,6 @@ public enum SortMode {
     case hangulOrder
     case hangulOrderReversed
     case editDistance
+    case matchPosition
     case none
 }
