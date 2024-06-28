@@ -8,7 +8,7 @@ final class HangulSearchTests: XCTestCase {
         super.setUp()
         let itemDatas = JSONLoader().loadJSON(from: "people") ?? ""
         let items = JSONParser().parseJSON(itemDatas)
-        searchEngine = HangulSearch(items: items, searchMode: .combined, keySelector: { $0.name }, isEqual:  { $0.age == $1.age })
+        searchEngine = HangulSearch(items: items, searchMode: .combined, sortMode: .matchPosition, keySelector: { $0.name }, isEqual:  { $0.age == $1.age })
     }
     
     override func tearDown() {
@@ -24,8 +24,8 @@ final class HangulSearchTests: XCTestCase {
     }
     
     func testSearchByFullString() throws {
-        let results = searchEngine?.searchItems(input: "철수")
-        let expectedNames = ["김철수", "이철수", "박철수", "최철수", "정철수", "강철수", "초철수", "윤철수", "장철수", "임철수"]
+        let results = searchEngine?.searchItems(input: "이")
+        let expectedNames = ["이민지", "이주화", "이철수", "이성수", "이희훈", "이상욱", "이영희", "이기석", "이나훈", "이아임", "김아이", "임민지", "임주화", "임철수", "임성수", "임희훈", "임상욱", "임영희", "임기석", "임나훈", "임아임"]
         let resultNames = results?.map { $0.name }
         XCTAssertEqual(resultNames, expectedNames, "검색 성공")
     }
@@ -51,8 +51,8 @@ final class HangulSearchTests: XCTestCase {
     // 데이터 추가 후 검색 테스트
     func testAddDataLogic() throws {
         searchEngine?.addItems(items: [Person(name: "킴철수", age: 29), Person(name: "이철수", age: 29)])
-        let results = searchEngine?.searchItems(input: "철수")
-        let expectedNames = ["김철수", "이철수", "박철수", "최철수", "정철수", "강철수", "초철수", "윤철수", "장철수", "임철수", "킴철수", "이철수"]
+        let results = searchEngine?.searchItems(input: "초")
+        let expectedNames = ["초민지", "초주화", "초철수", "초성수", "초희훈", "초상욱", "초영희", "초기석", "초나훈", "초아임"]
         let resultNames = results?.map { $0.name }
         XCTAssertEqual(resultNames, expectedNames, "검색 성공")
     }

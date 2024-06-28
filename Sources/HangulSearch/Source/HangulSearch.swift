@@ -97,6 +97,8 @@ public class HangulSearch<T> {
             results = sortItemsByHangulOrderReversed(items: results)
         case .editDistance:
             results = sortItemsByEditDistance(to: input, items: results)
+        case .matchPosition:
+            results = sortItemsByMatchPosition(input: input, items: results)
         case .none:
             break
         }
@@ -366,6 +368,19 @@ extension HangulSearch {
         }
         
         return distanceMatrix[m][n]
+    }
+    
+    /// 입력 문자열과 일치하는 위치를 기준으로 항목을 정렬
+    /// - Parameters:
+    ///   - input: 검색어
+    ///   - items: 정렬할 항목 배열
+    /// - Returns: 일치하는 위치를 기준으로 정렬된 항목 배열
+    private func sortItemsByMatchPosition(input: String, items: [T]) -> [T] {
+        return items.sorted {
+            let indexA = keySelector($0).range(of: input)?.lowerBound.utf16Offset(in: keySelector($0)) ?? Int.max
+            let indexB = keySelector($1).range(of: input)?.lowerBound.utf16Offset(in: keySelector($1)) ?? Int.max
+            return indexA < indexB
+        }
     }
     
 }
