@@ -220,7 +220,7 @@ extension HangulSearch {
         let decomposedInput = input.flatMap(decomposeKorean).map { String($0) }.joined()
         
         return processedItemsDecomposed.filter { _, decomposedKey in
-            decomposedKey.starts(with: decomposedInput)
+            decomposedKey.contains(decomposedInput)
         }.map { $0.item }
     }
     

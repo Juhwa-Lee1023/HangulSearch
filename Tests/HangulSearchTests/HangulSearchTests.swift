@@ -25,15 +25,15 @@ final class HangulSearchTests: XCTestCase {
     
     func testSearchByFullString() throws {
         let results = searchEngine?.searchItems(input: "이")
-        let expectedNames = ["이민지", "이주화", "이철수", "이성수", "이희훈", "이상욱", "이영희", "이기석", "이나훈", "이아임", "김아이", "임민지", "임주화", "임철수", "임성수", "임희훈", "임상욱", "임영희", "임기석", "임나훈", "임아임"]
+        let expectedNames = ["이민지", "이주화", "이철수", "이성수", "이희훈", "이상욱", "이영희", "이기석", "이나훈", "이아임", "김아이", "박아임", "최아임", "정아임", "강아임", "초아임", "윤아임", "장아임", "임민지", "임주화", "임철수", "임성수", "임희훈", "임상욱", "임영희", "임기석", "임나훈", "임아임"]
         let resultNames = results?.map { $0.name }
         XCTAssertEqual(resultNames, expectedNames, "검색 성공")
     }
     
     func testAutocompleteLogic() throws {
-        let results = searchEngine?.searchItems(input: "쵳")
-        let expectedNames = ["최철수"]
-        let resultNames = results?.map { $0.name } 
+        let results = searchEngine?.searchItems(input: "힇")
+        let expectedNames = ["김희훈", "이희훈", "박희훈", "최희훈", "정희훈", "강희훈", "초희훈", "윤희훈", "장희훈", "임희훈"]
+        let resultNames = results?.map { $0.name }
         XCTAssertEqual(resultNames, expectedNames, "검색 성공")
     }
     
