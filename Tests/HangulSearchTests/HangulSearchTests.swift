@@ -38,8 +38,10 @@ final class HangulSearchTests: XCTestCase {
     }
     
     func testEnglish() throws {
-        let results = searchEngine?.searchItems(input: "test")
-        XCTAssertTrue(results?.isEmpty ?? false, "비어 있음")
+        let results = searchEngine?.searchItems(input: "LeE")
+        let expectedNames = ["LeeJuhwa", "LeeTest", "LeeSun"]
+        let resultNames = results?.map { $0.name }
+        XCTAssertEqual(resultNames, expectedNames, "검색 성공")
     }
     
     // 빈 문자열 입력에 대한 테스트

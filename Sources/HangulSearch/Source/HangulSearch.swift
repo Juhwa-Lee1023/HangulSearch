@@ -209,7 +209,7 @@ extension HangulSearch {
     /// - Returns: 입력된 문자열을 포함하는 항목의 배열을 반환
     private func searchByFullChar(input: String) -> [T] {
         return items.filter { item in
-            keySelector(item).contains(input)
+            keySelector(item).localizedCaseInsensitiveContains(input)
         }
     }
     
@@ -220,7 +220,7 @@ extension HangulSearch {
         let decomposedInput = input.flatMap(decomposeKorean).map { String($0) }.joined()
         
         return processedItemsDecomposed.filter { _, decomposedKey in
-            decomposedKey.contains(decomposedInput)
+            decomposedKey.localizedCaseInsensitiveContains(decomposedInput)
         }.map { $0.item }
     }
     
@@ -312,14 +312,14 @@ extension HangulSearch {
     /// - Parameter items: 정렬할 항목 배열
     /// - Returns: 정렬된 항목 배열
     private func sortItemsByHangulOrder(items: [T]) -> [T] {
-        return items.sorted { keySelector($0) < keySelector($1) }
+        return items.sorted { keySelector($0).localizedCaseInsensitiveCompare(keySelector($1)) == .orderedAscending }
     }
     
     /// 항목들을 한글 자모 역순으로 정렬
     /// - Parameter items: 정렬할 항목 배열
     /// - Returns: 정렬된 항목 배열
     private func sortItemsByHangulOrderReversed(items: [T]) -> [T] {
-        return items.sorted { keySelector($0) > keySelector($1) }
+        return items.sorted { keySelector($0).localizedCaseInsensitiveCompare(keySelector($1)) == .orderedDescending }
     }
     
     /// 검색 입력에 대해 편집 거리를 기반으로 항목을 정렬
@@ -360,7 +360,7 @@ extension HangulSearch {
         
         for i in 1...m {
             for j in 1...n {
-                let cost = (s1[i - 1] == s2[j - 1]) ? 0 : 1
+                let cost = (s1[i - 1].lowercased() == s2[j - 1].lowercased()) ? 0 : 1
                 distanceMatrix[i][j] = min(
                     distanceMatrix[i - 1][j] + 1,
                     distanceMatrix[i][j - 1] + 1,
@@ -379,8 +379,8 @@ extension HangulSearch {
     /// - Returns: 일치하는 위치를 기준으로 정렬된 항목 배열
     private func sortItemsByMatchPosition(input: String, items: [T]) -> [T] {
         return items.sorted {
-            let indexA = keySelector($0).range(of: input)?.lowerBound.utf16Offset(in: keySelector($0)) ?? Int.max
-            let indexB = keySelector($1).range(of: input)?.lowerBound.utf16Offset(in: keySelector($1)) ?? Int.max
+            let indexA = keySelector($0).range(of: input, options: .caseInsensitive)?.lowerBound.utf16Offset(in: keySelector($0)) ?? Int.max
+            let indexB = keySelector($1).range(of: input, options: .caseInsensitive)?.lowerBound.utf16Offset(in: keySelector($1)) ?? Int.max
             return indexA < indexB
         }
     }
