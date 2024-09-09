@@ -51,10 +51,52 @@ searchEngine = HangulSearch(items: ["사과", "바나나", "포도"], mode: .con
 #### Person 객체 배열을 요소로 하는 `HangulSearch` 인스턴스 생성
 
 ```swift
+struct Person {
+    var name: String
+    var age: Int
+}
+
+let persons = [Person(name: "철수", age: 25), Person(name: "영희", age: 22)]
 var searchEngine: HangulSearch<Person>?
-let personSearch = HangulSearch(items: persons, mode: .autocomplete, keySelector: { $0.name })
+searchEngine = HangulSearch(items: persons, mode: .autocomplete, keySelector: { $0.name })
 ```
 <br/>
+
+`isEqual` 사용 방법
+`isEqual`은 검색 결과에서 중복된 항목을 제거할 때 사용됩니다. 기본적으로 `keySelector`를 통해 항목을 비교하지만, 특정 상황에서 두 항목의 부가적인 속성을 추가적으로 비교해 중복 여부를 판단해야 할 때 `isEqual`을 사용할 수 있습니다.
+
+사용해야 하는 경우
+- 중복 제거가 필요한 경우: 검색 결과에 동일한 항목이 여러 번 포함될 가능성이 있는 경우, isEqual을 사용하여 중복을 제거할 수 있습니다.
+- 객체 비교: 단순히 keySelector로 추출한 값이 동일하더라도, 객체의 다른 속성(예: age나 id)을 기준으로 추가적으로 비교해야 할 때 유용합니다.
+
+예를 들어, Person 객체 배열에서 이름이 같지만 나이가 다른 경우, 단순히 name으로만 비교하면 중복된 이름이 반환될 수 있습니다. 이때 `isEqual`을 사용하여 age 속성까지 비교하면 중복된 결과를 방지할 수 있습니다.
+
+`isEqual` 사용 예시
+
+```swift
+struct Person {
+    var name: String
+    var age: Int
+}
+
+let persons = [
+    Person(name: "철수", age: 25),
+    Person(name: "철수", age: 30),
+    Person(name: "영희", age: 22)
+]
+
+var searchEngine: HangulSearch<Person>?
+searchEngine = HangulSearch(
+    items: persons,
+    mode: .containsMatch,
+    keySelector: { $0.name },
+    isEqual: { $0.age == $1.age }  // 추가로 age까지 비교하여 중복을 방지
+)
+
+let results = searchEngine?.searchItems(input: "철수")
+// 결과: ["철수(25)", "철수(30)"]
+
+```
 
 ### 검색 모드별 사용 방법
 
@@ -132,6 +174,54 @@ https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/94652207-6896-488f
 
 
 </details>
+
+
+### 정렬 기능 사용 방법
+
+#### 1. 자모 순서 정렬 (hangulOrder)
+검색 결과를 한글 자모 순서에 따라 정렬합니다. 예를 들어, "ㄱ", "ㄴ", "ㄷ" 순서로 결과가 나타납니다.
+
+```swift
+searchEngine?.changeSortMode(mode: .hangulOrder)
+let results = searchEngine?.searchItems(input: "철수")
+// 결과가 한글 자모 순서대로 정렬됩니다.
+```
+
+#### 2. 자모 역순 정렬 (hangulOrderReversed)
+검색 결과를 한글 자모 순서의 역순으로 정렬합니다. 예를 들어, "ㅎ", "ㅍ", "ㅌ" 순서로 결과가 나타납니다.
+
+```swift
+searchEngine?.changeSortMode(mode: .hangulOrderReversed)
+let results = searchEngine?.searchItems(input: "철수")
+// 결과가 한글 자모 역순으로 정렬됩니다.
+```
+
+#### 3. 편집 거리 정렬 (editDistance)
+검색어와 항목 간의 편집 거리(Levenshtein Distance)를 기준으로 가장 유사한 항목부터 정렬합니다. 검색어가 완전히 일치하지 않더라도, 가장 가까운 단어들이 상위에 노출됩니다.
+
+```swift
+searchEngine?.changeSortMode(mode: .editDistance)
+let results = searchEngine?.searchItems(input: "철수")
+// 검색어와 가장 유사한 결과부터 순차적으로 정렬됩니다.
+```
+
+#### 4. 일치 위치 정렬 (matchPosition)
+항목 내에서 검색어가 나타나는 위치를 기준으로 정렬합니다. 검색어가 항목 내에서 앞에 나타날수록 우선순위가 높습니다.
+
+```swift
+searchEngine?.changeSortMode(mode: .matchPosition)
+let results = searchEngine?.searchItems(input: "철")
+// "철"이 앞부분에 위치하는 항목이 먼저 표시됩니다.
+```
+
+#### 5. 정렬 없이 기본 순서 유지 (none)
+정렬 없이 기본 데이터 순서대로 결과를 반환합니다.
+
+```swift
+searchEngine?.changeSortMode(mode: .none)
+let results = searchEngine?.searchItems(input: "철수")
+// 데이터가 입력된 순서대로 반환됩니다.
+```
 
 
 
