@@ -1,6 +1,9 @@
 # Created by https://www.toptal.com/developers/gitignore/api/swift,swiftpackagemanager,swiftpm,xcode,xcodeinjection,objective-c
 # Edit at https://www.toptal.com/developers/gitignore?templates=swift,swiftpackagemanager,swiftpm,xcode,xcodeinjection,objective-c
 
+# macOS Finder metadata
+.DS_Store
+
 ### Objective-C ###
 # Xcode
 #
