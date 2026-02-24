@@ -73,7 +73,7 @@ public class HangulSearch<T> {
     /// - Returns: 검색 결과로서, 검색어에 맞는 항목의 배열을 반환
     public func searchItems(input: String) -> [T] {
         if input.isEmpty {
-            // TODO: 검색어가 비어있을 때, 모드에 따라 반환 형태가 다르게 처리되어야 함.
+            // 검색 모드와 관계없이 빈 입력은 빈 결과로 취급합니다.
             return []
         }
         
@@ -147,6 +147,10 @@ public class HangulSearch<T> {
 extension HangulSearch {
     /// 검색 항목을 전처리하여 매번 추출을 할 필요가 없도록 함
     private func preprocessItems() {
+        // 모드 전환 시 이전 전처리 결과가 남지 않도록 캐시를 초기화합니다.
+        processedItemsChosung = []
+        processedItemsDecomposed = []
+        
         switch searchMode {
         case .chosungAndFullMatch:
             // 초성 모드일 때는 초성 키로 매핑하여 처리
@@ -213,9 +217,9 @@ extension HangulSearch {
         }
     }
     
-    /// 자동 완성 검색을 수행하여 입력된 문자열과 시작하는 부분이 일치하는 항목을 반환
+    /// 자동 완성 검색을 수행하여 입력된 문자열을 포함하는 항목을 반환
     /// - Parameter input: 검색어로 사용될 문자열
-    /// - Returns: 입력된 문자열로 시작하는 항목의 배열을 반환
+    /// - Returns: 입력된 문자열을 포함하는 항목의 배열을 반환
     private func searchByAutocomplete(input: String) -> [T] {
         let decomposedInput = input.flatMap(decomposeKorean).map { String($0) }.joined()
         
@@ -229,6 +233,7 @@ extension HangulSearch {
     /// - Returns: 입력된 초성 및 자동 완성에 해당하는 항목의 배열을 반환
     private func searchByCombined(input: String) -> [T] {
         var results = [T]()
+        let fullMatchResults = searchByFullChar(input: input)
         
         // 중복 검사는 두 가지 방식으로 수행될 수 있음
         // 1. 사용자가 `isEqual` 클로저를 제공한 경우: 이 클로저는 `keySelector` 결과와 추가적으로 비교를 위해 선언한 선택자를 이용해
@@ -252,9 +257,11 @@ extension HangulSearch {
         }
         
         // 1. 완전 일치 검색 결과를 결과 배열에 추가
-        searchByFullChar(input: input).forEach(appendIfUnique)
-        // 2. 초성 검색 또는 완전 일치 검색 결과를 결과 배열에 추가
-        (isPureChosung(input: input) ? searchByChosung(input: input) : searchByFullChar(input: input)).forEach(appendIfUnique)
+        fullMatchResults.forEach(appendIfUnique)
+        // 2. 초성 입력인 경우 초성 검색 결과를 결과 배열에 추가
+        if isPureChosung(input: input) {
+            searchByChosung(input: input).forEach(appendIfUnique)
+        }
         // 3. 자동 완성 검색 결과를 결과 배열에 추가
         searchByAutocomplete(input: input).forEach(appendIfUnique)
         return results
@@ -328,9 +335,16 @@ extension HangulSearch {
     ///   - items: 정렬할 항목 배열
     /// - Returns: 정렬된 항목 배열
     private func sortItemsByEditDistance(to target: String, items: [T]) -> [T] {
-        return items.sorted {
-            levenshteinDistance(from: keySelector($0), to: target) < levenshteinDistance(from: keySelector($1), to: target)
+        let scoredItems = items.map { item in
+            (item: item, distance: levenshteinDistance(from: keySelector(item), to: target))
         }
+        
+        return scoredItems.sorted { lhs, rhs in
+            if lhs.distance == rhs.distance {
+                return keySelector(lhs.item).localizedCaseInsensitiveCompare(keySelector(rhs.item)) == .orderedAscending
+            }
+            return lhs.distance < rhs.distance
+        }.map { $0.item }
     }
     
     /// 레벤슈타인 편집 거리 계산 함수
