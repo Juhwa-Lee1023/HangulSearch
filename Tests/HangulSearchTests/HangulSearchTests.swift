@@ -95,6 +95,18 @@ final class HangulSearchTests: XCTestCase {
         }
     }
     
+    func testEditDistanceTieKeepsOriginalOrder() throws {
+        let tieItems = [
+            Person(name: "xa", age: 1),
+            Person(name: "ya", age: 2),
+            Person(name: "za", age: 3)
+        ]
+        let engine = makeEngine(items: tieItems, searchMode: .containsMatch, sortMode: .editDistance)
+        
+        let results = engine.searchItems(input: "a")
+        XCTAssertEqual(results.map(\.name), ["xa", "ya", "za"])
+    }
+    
     func testMatchPositionSortModeIsMonotonic() throws {
         let engine = makeEngine(items: items, searchMode: .combined, sortMode: .matchPosition)
         let input = "이"

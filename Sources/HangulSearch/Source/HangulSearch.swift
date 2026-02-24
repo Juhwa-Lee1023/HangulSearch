@@ -335,13 +335,13 @@ extension HangulSearch {
     ///   - items: 정렬할 항목 배열
     /// - Returns: 정렬된 항목 배열
     private func sortItemsByEditDistance(to target: String, items: [T]) -> [T] {
-        let scoredItems = items.map { item in
-            (item: item, distance: levenshteinDistance(from: keySelector(item), to: target))
+        let scoredItems = items.enumerated().map { index, item in
+            (index: index, item: item, distance: levenshteinDistance(from: keySelector(item), to: target))
         }
         
         return scoredItems.sorted { lhs, rhs in
             if lhs.distance == rhs.distance {
-                return keySelector(lhs.item).localizedCaseInsensitiveCompare(keySelector(rhs.item)) == .orderedAscending
+                return lhs.index < rhs.index
             }
             return lhs.distance < rhs.distance
         }.map { $0.item }
