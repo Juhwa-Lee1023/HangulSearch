@@ -17,7 +17,9 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "HangulSearch"),
+            name: "HangulSearch",
+            resources: [.copy("PrivacyInfo.xcprivacy")]
+        ),
         .testTarget(
             name: "HangulSearchTests",
             dependencies: ["HangulSearch"],
