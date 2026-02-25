@@ -52,6 +52,10 @@ public class HangulSearch<T> {
     /// - 각 항목의 키(key)는 복합 분해된 문자열입니다.
     private var processedItemsDecomposed: [ProcessedSearchEntry] = []
     
+    /// 원본 키 캐시
+    /// - normalizeToNFC가 false인 기본 경로에서 재사용합니다.
+    private var cachedItems: [SearchEntry] = []
+    
     /// 검색을 수행할 선택자를 선택
     private var keySelector: (T) -> String
     
@@ -90,31 +94,32 @@ public class HangulSearch<T> {
     ///   - options: 검색 옵션
     /// - Returns: 검색 결과로서, 검색어에 맞는 항목의 배열을 반환
     public func searchItems(input: String, options: HangulSearchOptions) -> [T] {
-        let effectiveMode = options.mode ?? searchMode
-        let effectiveSortMode = options.sortMode ?? sortMode
         let normalizedInput = normalizeIfNeeded(input, enabled: options.normalizeToNFC)
-        let context = buildSearchContext(mode: effectiveMode, normalizeToNFC: options.normalizeToNFC)
         let minimumInputLength = max(0, options.minInputLength)
         
-        var results: [SearchEntry]
+        if normalizedInput.isEmpty, options.emptyQueryBehavior == .returnEmpty {
+            return []
+        }
+        
+        if !normalizedInput.isEmpty, normalizedInput.count < minimumInputLength {
+            return []
+        }
+        
+        let effectiveMode = options.mode ?? searchMode
+        let effectiveSortMode = options.sortMode ?? sortMode
+        let context = buildSearchContext(mode: effectiveMode, normalizeToNFC: options.normalizeToNFC)
+        let results: [SearchEntry]
         
         if normalizedInput.isEmpty {
-            switch options.emptyQueryBehavior {
-            case .returnEmpty:
-                results = []
-            case .returnAll:
-                results = context.items
-            }
-        } else if normalizedInput.count < minimumInputLength {
-            results = []
+            results = context.items
         } else {
             results = searchEntries(input: normalizedInput, mode: effectiveMode, context: context)
         }
         
-        results = sortEntries(results, by: effectiveSortMode, input: normalizedInput)
-        results = applyPagination(to: results, offset: options.offset, limit: options.limit)
+        var finalResults = sortEntries(results, by: effectiveSortMode, input: normalizedInput)
+        finalResults = applyPagination(to: finalResults, offset: options.offset, limit: options.limit)
         
-        return results.map(\.item)
+        return finalResults.map(\.item)
     }
     
     /// 검색을 수행할 데이터를 변경, 변경된 항목에 대해 사전 처리를 수행
@@ -159,21 +164,21 @@ extension HangulSearch {
         // 모드 전환 시 이전 전처리 결과가 남지 않도록 캐시를 초기화합니다.
         processedItemsChosung = []
         processedItemsDecomposed = []
-        let baseEntries = buildBaseEntries(normalizeToNFC: false)
+        cachedItems = buildBaseEntries(normalizeToNFC: false)
         
         switch searchMode {
         case .chosungAndFullMatch:
             // 초성 모드일 때는 초성 키로 매핑하여 처리
-            processedItemsChosung = buildChosungEntries(from: baseEntries)
+            processedItemsChosung = buildChosungEntries(from: cachedItems)
             
         case .autocomplete:
             // 자동 완성 모드일 때는 한글을 분해하여 처리
-            processedItemsDecomposed = buildDecomposedEntries(from: baseEntries)
+            processedItemsDecomposed = buildDecomposedEntries(from: cachedItems)
             
         case .combined:
             // 종합 모드일 때는 초성 매핑과 한글 분해를 둘 다 수행
-            processedItemsChosung = buildChosungEntries(from: baseEntries)
-            processedItemsDecomposed = buildDecomposedEntries(from: baseEntries)
+            processedItemsChosung = buildChosungEntries(from: cachedItems)
+            processedItemsDecomposed = buildDecomposedEntries(from: cachedItems)
             
         default:
             // containsMatch 모드의 경우 사전 작업을 수행하지 않음
@@ -182,9 +187,27 @@ extension HangulSearch {
     }
     
     private func buildSearchContext(mode: HangulSearchMode, normalizeToNFC: Bool) -> SearchContext {
-        let baseEntries = buildBaseEntries(normalizeToNFC: normalizeToNFC)
+        if normalizeToNFC {
+            let baseEntries = buildBaseEntries(normalizeToNFC: true)
+            switch mode {
+            case .containsMatch:
+                return SearchContext(items: baseEntries, chosung: [], decomposed: [])
+            case .chosungAndFullMatch:
+                return SearchContext(items: baseEntries, chosung: buildChosungEntries(from: baseEntries), decomposed: [])
+            case .autocomplete:
+                return SearchContext(items: baseEntries, chosung: [], decomposed: buildDecomposedEntries(from: baseEntries))
+            case .combined:
+                return SearchContext(
+                    items: baseEntries,
+                    chosung: buildChosungEntries(from: baseEntries),
+                    decomposed: buildDecomposedEntries(from: baseEntries)
+                )
+            }
+        }
         
-        if !normalizeToNFC, mode == searchMode {
+        let baseEntries = cachedItems.isEmpty ? buildBaseEntries(normalizeToNFC: false) : cachedItems
+        
+        if mode == searchMode {
             switch mode {
             case .containsMatch:
                 return SearchContext(items: baseEntries, chosung: [], decomposed: [])
@@ -485,11 +508,17 @@ extension HangulSearch {
     ///   - entries: 정렬할 항목 배열
     /// - Returns: 일치하는 위치를 기준으로 정렬된 항목 배열
     private func sortEntriesByMatchPosition(input: String, entries: [SearchEntry]) -> [SearchEntry] {
-        return entries.sorted {
-            let indexA = $0.key.range(of: input, options: .caseInsensitive)?.lowerBound.utf16Offset(in: $0.key) ?? Int.max
-            let indexB = $1.key.range(of: input, options: .caseInsensitive)?.lowerBound.utf16Offset(in: $1.key) ?? Int.max
-            return indexA < indexB
+        let scoredEntries = entries.enumerated().map { index, entry in
+            let matchIndex = entry.key.range(of: input, options: .caseInsensitive)?.lowerBound.utf16Offset(in: entry.key) ?? Int.max
+            return (index: index, entry: entry, matchIndex: matchIndex)
         }
+        
+        return scoredEntries.sorted { lhs, rhs in
+            if lhs.matchIndex == rhs.matchIndex {
+                return lhs.index < rhs.index
+            }
+            return lhs.matchIndex < rhs.matchIndex
+        }.map { $0.entry }
     }
     
     private func applyPagination(to entries: [SearchEntry], offset: Int, limit: Int?) -> [SearchEntry] {

@@ -15,15 +15,19 @@ final class HangulSearchOptionsSearchTests: XCTestCase {
         try super.tearDownWithError()
     }
     
-    func testDefaultOptionsMatchesLegacySearchItems() throws {
+    func testDefaultOptionsProducesExpectedResults() throws {
         let engine = makeEngine(items: items, searchMode: .combined, sortMode: .matchPosition)
-        let inputs = ["ㅊㅅ", "이", "힇", "LeE", ""]
+        let options = HangulSearchOptions()
         
-        for input in inputs {
-            let legacy = engine.searchItems(input: input).map(\.name)
-            let withDefaultOptions = engine.searchItems(input: input, options: HangulSearchOptions()).map(\.name)
-            XCTAssertEqual(legacy, withDefaultOptions)
-        }
+        XCTAssertEqual(
+            engine.searchItems(input: "ㅊㅅ", options: options).map(\.name),
+            ["김철수", "이철수", "박철수", "최철수", "최성수", "최상욱", "정철수", "강철수", "초철수", "초성수", "초상욱", "윤철수", "장철수", "임철수"]
+        )
+        XCTAssertEqual(
+            engine.searchItems(input: "LeE", options: options).map(\.name),
+            ["LeeJuhwa", "LeeTest", "LeeSun"]
+        )
+        XCTAssertTrue(engine.searchItems(input: "", options: options).isEmpty)
     }
     
     func testOptionsCanOverrideSearchMode() throws {
@@ -105,6 +109,20 @@ final class HangulSearchOptionsSearchTests: XCTestCase {
         )
         
         XCTAssertTrue(engine.searchItems(input: "", options: options).isEmpty)
+    }
+    
+    func testPaginationAppliesToNonEmptyQueryResults() throws {
+        let engine = makeEngine(items: items, searchMode: .containsMatch, sortMode: .none)
+        let options = HangulSearchOptions(limit: 3, offset: 2)
+        
+        let expected = items
+            .filter { $0.name.localizedCaseInsensitiveContains("철수") }
+            .dropFirst(2)
+            .prefix(3)
+            .map(\.name)
+        
+        let results = engine.searchItems(input: "철수", options: options).map(\.name)
+        XCTAssertEqual(results, expected)
     }
     
     func testNormalizeToNFCEnablesChosungMatchForDecomposedHangul() throws {
