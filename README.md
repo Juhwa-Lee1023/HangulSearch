@@ -2,7 +2,7 @@
 [![stability-beta](https://img.shields.io/badge/stability-beta-33bbff.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#beta)
 
 `HangulSearch`는 Swift 기반 한글 검색 라이브러리입니다.  
-초성 검색, 일반 문자열 검색, 자동 완성 검색, 복합 검색을 지원하며 검색 결과 정렬 기능을 함께 제공합니다.
+초성 검색, 일반 문자열 검색, 자동 완성 검색, 복합 검색을 지원하며 결과 정렬/옵션/메타데이터 API를 제공합니다.
 
 ## 지원 환경
 - iOS 11.0 이상
@@ -13,118 +13,11 @@
 ## 설치
 ### Xcode에서 추가
 1. Xcode 상단 메뉴에서 **File > Swift Packages > Add Package Dependency...**를 선택합니다.
-2. 다음 저장소 URL을 입력합니다.
-   - `https://github.com/Juhwa-Lee1023/HangulSearch`
+2. 저장소 URL `https://github.com/Juhwa-Lee1023/HangulSearch`를 입력합니다.
 3. 브랜치 또는 버전 규칙을 선택합니다.
 4. 패키지 추가를 완료합니다.
 
-## 핵심 타입
-### 초기화
-```swift
-public init(
-    items: [T],
-    searchMode: HangulSearchMode = .chosungAndFullMatch,
-    sortMode: SortMode = .none,
-    keySelector: @escaping (T) -> String,
-    isEqual: ((T, T) -> Bool)? = nil
-)
-```
-
-### 파라미터 설명
-- `items`: 검색 대상 데이터 배열
-- `searchMode`: 검색 방식
-- `sortMode`: 결과 정렬 방식
-- `keySelector`: 각 항목에서 검색 기준 문자열을 추출하는 클로저
-- `isEqual`: `combined` 모드에서 중복 제거 기준을 확장하기 위한 비교 클로저
-
-## 검색 모드
-### `containsMatch`
-- `keySelector(item)` 값에 입력 문자열이 포함되는 항목을 검색합니다.
-- 문자열 비교는 대소문자를 구분하지 않습니다.
-
-### `chosungAndFullMatch`
-- 입력이 순수 초성(예: `ㅊㅅ`)인 경우 초성 기반 검색을 수행합니다.
-- 입력이 초성이 아닌 경우 `containsMatch`와 동일하게 동작합니다.
-
-### `autocomplete`
-- 입력 문자열과 항목 문자열을 한글 자모로 분해한 뒤 포함 여부를 비교합니다.
-- 오타 또는 조합 입력에 대한 검색 유연성이 높습니다.
-
-### `combined`
-- 다음 결과를 결합하여 반환합니다.
-  - 전체 문자열 검색
-  - 초성 검색(입력이 순수 초성인 경우만)
-  - 자동 완성 검색
-- 중복 항목은 `keySelector` 기준으로 제거합니다.
-- `isEqual`이 제공되면 `keySelector` 값이 같은 항목에 대해 추가 비교를 수행합니다.
-
-## 정렬 모드
-### `none`
-- 입력 데이터 순서를 유지합니다.
-
-### `hangulOrder`
-- 검색 결과를 한글 자모 순서(오름차순)로 정렬합니다.
-
-### `hangulOrderReversed`
-- 검색 결과를 한글 자모 순서(내림차순)로 정렬합니다.
-
-### `editDistance`
-- 검색어와 항목 문자열의 Levenshtein distance를 기준으로 정렬합니다.
-- 거리 값이 작은 항목이 우선합니다.
-
-### `matchPosition`
-- 항목 내에서 검색어가 처음 일치하는 위치를 기준으로 정렬합니다.
-- 일치 위치가 앞설수록 우선합니다.
-
-## 공개 메서드
-### 검색 실행
-```swift
-public func searchItems(input: String) -> [T]
-```
-- 빈 문자열 입력 시 빈 배열을 반환합니다.
-
-### 데이터 교체
-```swift
-public func changeItems(items: [T])
-```
-
-### 데이터 추가
-```swift
-public func addItems(items: [T])
-```
-
-### 검색 모드 변경
-```swift
-public func changeSearchMode(mode: HangulSearchMode)
-```
-
-### 검색 키 선택자 변경
-```swift
-public func changeKeySelector(keySelector: @escaping (T) -> String)
-```
-
-### 정렬 모드 변경
-```swift
-public func changeSortMode(mode: SortMode)
-```
-
-## 사용 예시
-### 문자열 배열 검색
-```swift
-import HangulSearch
-
-let fruits = ["사과", "바나나", "포도"]
-let engine = HangulSearch(
-    items: fruits,
-    searchMode: .containsMatch,
-    sortMode: .none,
-    keySelector: { $0 }
-)
-
-let results = engine.searchItems(input: "과")
-```
-
-### 객체 배열 검색
+## 빠른 시작
 ```swift
 import HangulSearch
 
@@ -134,9 +27,9 @@ struct Person {
 }
 
 let people = [
-    Person(name: "철수", age: 25),
-    Person(name: "철수", age: 30),
-    Person(name: "영희", age: 22)
+    Person(name: "김철수", age: 25),
+    Person(name: "이철수", age: 30),
+    Person(name: "이영희", age: 22)
 ]
 
 let engine = HangulSearch(
@@ -147,12 +40,132 @@ let engine = HangulSearch(
     isEqual: { $0.age == $1.age }
 )
 
-let results = engine.searchItems(input: "ㅊㅅ")
+let legacyResults = engine.searchItems(input: "ㅊㅅ")
+let optionResults = engine.searchItems(
+    input: "철수",
+    options: HangulSearchOptions(limit: 10, offset: 0)
+)
+let hits = engine.searchHits(
+    input: "철수",
+    options: HangulSearchOptions(sortMode: .editDistance)
+)
 ```
+
+## 공개 API
+### 생성자
+```swift
+public init(
+    items: [T],
+    searchMode: HangulSearchMode = .chosungAndFullMatch,
+    sortMode: SortMode = .none,
+    keySelector: @escaping (T) -> String,
+    isEqual: ((T, T) -> Bool)? = nil
+)
+```
+
+### 검색
+```swift
+public func searchItems(input: String) -> [T]
+public func searchItems(input: String, options: HangulSearchOptions) -> [T]
+public func searchHits(input: String, options: HangulSearchOptions) -> [HangulSearchHit<T>]
+```
+
+### 갱신/설정 변경
+```swift
+public func changeItems(items: [T])
+public func addItems(items: [T])
+public func changeSearchMode(mode: HangulSearchMode)
+public func changeKeySelector(keySelector: @escaping (T) -> String)
+public func changeSortMode(mode: SortMode)
+```
+
+## 옵션 타입
+### `HangulSearchOptions`
+```swift
+public struct HangulSearchOptions {
+    public enum EmptyQueryBehavior { case returnEmpty, returnAll }
+
+    public var mode: HangulSearchMode?
+    public var sortMode: SortMode?
+    public var limit: Int?
+    public var offset: Int
+    public var minInputLength: Int
+    public var normalizeToNFC: Bool
+    public var emptyQueryBehavior: EmptyQueryBehavior
+}
+```
+
+기본값(1.x 호환):
+- `mode: nil` (엔진 기본 모드 사용)
+- `sortMode: nil` (엔진 기본 정렬 사용)
+- `limit: nil` (제한 없음)
+- `offset: 0`
+- `minInputLength: 1`
+- `normalizeToNFC: false` (legacy 동작 유지)
+- `emptyQueryBehavior: .returnEmpty` (legacy 동작 유지)
+
+### `HangulSearchHit<Item>`
+- `item`: 원본 항목
+- `matchKinds`: 매칭 종류 집합 (`.fullMatch`, `.chosungMatch`, `.autocompleteMatch`)
+- `matchPosition`: `SortMode.matchPosition` 기준이 되는 시작 위치(없으면 `nil`)
+- `editDistance`: `SortMode.editDistance` 계산값(없으면 `nil`)
+
+## 검색 모드
+### `containsMatch`
+- `keySelector(item)` 값에 입력 문자열이 포함되는 항목을 검색합니다.
+- 문자열 비교는 대소문자를 구분하지 않습니다.
+
+### `chosungAndFullMatch`
+- 입력이 순수 초성(예: `ㅊㅅ`)이면 초성 검색을 수행합니다.
+- 입력이 초성이 아니면 `containsMatch`와 동일하게 동작합니다.
+
+### `autocomplete`
+- 입력/항목 문자열을 한글 자모로 분해한 뒤 포함 여부를 비교합니다.
+
+### `combined`
+- 전체 문자열 검색, 초성 검색(순수 초성 입력 시), 자동 완성 검색 결과를 순서대로 결합합니다.
+- 중복 제거 키는 `keySelector` 결과이며, `isEqual`이 제공되면 추가 비교를 수행합니다.
+
+## 정렬 모드
+### `none`
+- 입력 순서를 유지합니다.
+
+### `hangulOrder`
+- 한글 자모 기준 오름차순 정렬입니다.
+
+### `hangulOrderReversed`
+- 한글 자모 기준 내림차순 정렬입니다.
+
+### `editDistance`
+- 검색어와 항목 문자열의 Levenshtein distance 오름차순 정렬입니다.
+
+### `matchPosition`
+- 항목 내에서 검색어가 처음 일치하는 위치 오름차순 정렬입니다.
+
+## 동작 계약 (1.x)
+- 기존 API `searchItems(input:)`는 유지되며 기본 동작을 보존합니다.
+- 기본 옵션에서 빈 입력은 빈 배열을 반환합니다.
+- `searchItems(input:options:)` / `searchHits(input:options:)`는 Additive API입니다.
+- `editDistance`/`matchPosition` 동률은 원본 검색 결과 순서를 tie-break로 사용합니다.
+- `combined` 모드는 결과 중복 제거 후 `matchKinds`를 병합합니다.
+- `normalizeToNFC`는 opt-in이며 기본값 `false`로 legacy 동작을 유지합니다.
+
+## 성능 및 가변성 참고
+- `changeItems`, `addItems`, `changeSearchMode`, `changeKeySelector` 호출 시 내부 전처리 캐시를 다시 구성합니다.
+- 검색 입력이 동일해도 `sortMode`가 `editDistance`/`matchPosition`이면 입력 기준 계산 비용이 추가됩니다.
+- `searchHits`는 정렬에 필요한 메타데이터를 한 번 계산해 결과에 재사용합니다.
+
+## CI / 품질 게이트
+- Pull Request 및 `main`/`codex/**` push에서 아래 잡을 실행합니다.
+- `swift test --parallel`
+- `swift test -c release`
+- benchmark smoke (`HangulSearchBenchmarkSmokeTests`)
 
 ## 참고 자료
 - [테스트 데이터](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/MockData/people.json)
-- [테스트 코드](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/HangulSearchTests.swift)
+- [기본 테스트](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/HangulSearchTests.swift)
+- [옵션 API 테스트](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/HangulSearchOptionsSearchTests.swift)
+- [상세 결과 API 테스트](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/HangulSearchHitsTests.swift)
 
 ## 데모 영상
 - 초성 검색: https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/9f5e0f28-d8ab-4010-9b58-79eafb35b798
