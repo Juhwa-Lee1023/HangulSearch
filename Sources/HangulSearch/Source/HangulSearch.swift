@@ -345,11 +345,31 @@ extension HangulSearch {
     
     private func searchByCombinedEntries(input: String, context: SearchContext) -> [SearchEntry] {
         var results = [SearchEntry]()
+        var keyBuckets = [String: [Int]]()
         
         let appendIfNeeded: (SearchEntry) -> Void = { entry in
-            if self.findCombinedIndex(for: entry, in: results) == nil {
+            if let customIsEqual = self.isEqual {
+                if let candidateIndices = keyBuckets[entry.key] {
+                    for candidateIndex in candidateIndices {
+                        if customIsEqual(results[candidateIndex].item, entry.item) {
+                            return
+                        }
+                    }
+                }
+                
+                let newIndex = results.count
                 results.append(entry)
+                keyBuckets[entry.key, default: []].append(newIndex)
+                return
             }
+            
+            guard keyBuckets[entry.key] == nil else {
+                return
+            }
+            
+            let newIndex = results.count
+            results.append(entry)
+            keyBuckets[entry.key] = [newIndex]
         }
         
         searchByFullChar(input: input, entries: context.items).forEach(appendIfNeeded)
@@ -361,16 +381,6 @@ extension HangulSearch {
         searchByAutocomplete(input: input, entries: context.decomposed).forEach(appendIfNeeded)
         
         return results
-    }
-    
-    private func findCombinedIndex(for entry: SearchEntry, in entries: [SearchEntry]) -> Int? {
-        if let customIsEqual = isEqual {
-            return entries.firstIndex { otherEntry in
-                otherEntry.key == entry.key && customIsEqual(otherEntry.item, entry.item)
-            }
-        }
-        
-        return entries.firstIndex(where: { $0.key == entry.key })
     }
     
     private func searchHitEntries(input: String, mode: HangulSearchMode, context: SearchContext) -> [HitEntry] {
@@ -435,14 +445,34 @@ extension HangulSearch {
     /// - Returns: 매칭 메타데이터가 결합된 검색 결과 배열
     private func searchByCombinedHitEntries(input: String, context: SearchContext) -> [HitEntry] {
         var results = [HitEntry]()
+        var keyBuckets = [String: [Int]]()
         let fullMatchResults = searchByFullChar(input: input, entries: context.items)
         
         let appendOrMerge: (SearchEntry, HangulMatchKind) -> Void = { entry, kind in
-            if let existingIndex = self.findCombinedHitIndex(for: entry, in: results) {
-                results[existingIndex].matchKinds.insert(kind)
-            } else {
+            if let customIsEqual = self.isEqual {
+                if let candidateIndices = keyBuckets[entry.key] {
+                    for candidateIndex in candidateIndices {
+                        if customIsEqual(results[candidateIndex].item, entry.item) {
+                            results[candidateIndex].matchKinds.insert(kind)
+                            return
+                        }
+                    }
+                }
+                
+                let newIndex = results.count
                 results.append((item: entry.item, key: entry.key, matchKinds: [kind]))
+                keyBuckets[entry.key, default: []].append(newIndex)
+                return
             }
+            
+            if let existingIndex = keyBuckets[entry.key]?.first {
+                results[existingIndex].matchKinds.insert(kind)
+                return
+            }
+            
+            let newIndex = results.count
+            results.append((item: entry.item, key: entry.key, matchKinds: [kind]))
+            keyBuckets[entry.key] = [newIndex]
         }
         
         // 1. 완전 일치 검색 결과를 결과 배열에 추가
@@ -454,16 +484,6 @@ extension HangulSearch {
         // 3. 자동 완성 검색 결과를 결과 배열에 추가
         searchByAutocomplete(input: input, entries: context.decomposed).forEach { appendOrMerge($0, .autocompleteMatch) }
         return results
-    }
-    
-    private func findCombinedHitIndex(for entry: SearchEntry, in entries: [HitEntry]) -> Int? {
-        if let customIsEqual = isEqual {
-            return entries.firstIndex { otherEntry in
-                otherEntry.key == entry.key && customIsEqual(otherEntry.item, entry.item)
-            }
-        }
-        
-        return entries.firstIndex(where: { $0.key == entry.key })
     }
     
     /// 주어진 문자에 대한 초성의 인덱스를 반환
@@ -601,34 +621,39 @@ extension HangulSearch {
     ///   - s2: 두 번째 문자열
     /// - Returns: 두 문자열 간의 편집 거리
     private func levenshteinDistance(from s1: String, to s2: String) -> Int {
-        let s1 = Array(s1)
-        let s2 = Array(s2)
-        let m = s1.count
-        let n = s2.count
+        var leftLowercased = Array(s1).map { $0.lowercased() }
+        var rightLowercased = Array(s2).map { $0.lowercased() }
+        
+        // 메모리 사용량을 줄이기 위해 더 짧은 문자열 길이를 row 크기로 사용합니다.
+        if leftLowercased.count < rightLowercased.count {
+            swap(&leftLowercased, &rightLowercased)
+        }
+        
+        let m = leftLowercased.count
+        let n = rightLowercased.count
         
         if m == 0 { return n }
         if n == 0 { return m }
         
-        var distanceMatrix = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
-        for i in 0...m {
-            distanceMatrix[i][0] = i
-        }
-        for j in 0...n {
-            distanceMatrix[0][j] = j
-        }
+        var previousRow = Array(0...n)
+        var currentRow = Array(repeating: 0, count: n + 1)
         
         for i in 1...m {
+            currentRow[0] = i
+            
             for j in 1...n {
-                let cost = (s1[i - 1].lowercased() == s2[j - 1].lowercased()) ? 0 : 1
-                distanceMatrix[i][j] = min(
-                    distanceMatrix[i - 1][j] + 1,
-                    distanceMatrix[i][j - 1] + 1,
-                    distanceMatrix[i - 1][j - 1] + cost
+                let cost = (leftLowercased[i - 1] == rightLowercased[j - 1]) ? 0 : 1
+                currentRow[j] = min(
+                    previousRow[j] + 1,
+                    currentRow[j - 1] + 1,
+                    previousRow[j - 1] + cost
                 )
             }
+            
+            swap(&previousRow, &currentRow)
         }
         
-        return distanceMatrix[m][n]
+        return previousRow[n]
     }
     
     private func applyPagination<Entry>(to entries: [Entry], offset: Int, limit: Int?) -> [Entry] {
