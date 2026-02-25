@@ -159,6 +159,7 @@ public struct HangulSearchOptions {
 - Pull Request 및 `main`/`codex/**` push에서 아래 잡을 실행합니다.
 - `swift test --parallel`
 - `swift test -c release`
+- `swift test --sanitize=thread`
 - benchmark smoke (`HangulSearchBenchmarkSmokeTests`)
 
 ## 참고 자료
@@ -166,6 +167,12 @@ public struct HangulSearchOptions {
 - [기본 테스트](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/HangulSearchTests.swift)
 - [옵션 API 테스트](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/HangulSearchOptionsSearchTests.swift)
 - [상세 결과 API 테스트](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/HangulSearchHitsTests.swift)
+
+## 운영 문서
+- [CHANGELOG](CHANGELOG.md)
+- [MIGRATION](MIGRATION.md)
+- [CONTRIBUTING](CONTRIBUTING.md)
+- [SECURITY](SECURITY.md)
 
 ## 데모 영상
 - 초성 검색: https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/9f5e0f28-d8ab-4010-9b58-79eafb35b798

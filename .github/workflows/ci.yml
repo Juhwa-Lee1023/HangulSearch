@@ -38,6 +38,20 @@ jobs:
       - name: Run Unit Tests (Release)
         run: swift test -c release
 
+  test-tsan:
+    name: Test (Thread Sanitizer)
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Swift Version
+        run: swift --version
+
+      - name: Run Unit Tests (TSan)
+        run: swift test --sanitize=thread
+
   benchmark-smoke:
     name: Benchmark Smoke (Synthetic 10k)
     runs-on: macos-14
