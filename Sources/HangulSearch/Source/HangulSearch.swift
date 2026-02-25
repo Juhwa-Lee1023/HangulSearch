@@ -3,6 +3,7 @@ import Foundation
 public class HangulSearch<T> {
     private typealias SearchEntry = (item: T, key: String)
     private typealias HitEntry = (item: T, key: String, matchKinds: Set<HangulMatchKind>)
+    private typealias AnnotatedHitEntry = (entry: HitEntry, matchPosition: Int?, editDistance: Int?)
     private typealias ProcessedSearchEntry = (item: T, key: String, originalKey: String)
     
     private struct SearchContext {
@@ -145,26 +146,18 @@ public class HangulSearch<T> {
             hitEntries = searchHitEntries(input: normalizedInput, mode: effectiveMode, context: context)
         }
         
-        var sortedHits = sortHitEntries(hitEntries, by: effectiveSortMode, input: normalizedInput)
+        var annotatedHits = annotateHitEntries(hitEntries, input: normalizedInput)
+        annotatedHits = sortAnnotatedHitEntries(annotatedHits, by: effectiveSortMode, input: normalizedInput)
+        
+        var sortedHits = annotatedHits
         sortedHits = applyPagination(to: sortedHits, offset: options.offset, limit: options.limit)
         
-        return sortedHits.map { entry in
-            let matchPosition: Int?
-            let editDistance: Int?
-            
-            if normalizedInput.isEmpty {
-                matchPosition = nil
-                editDistance = nil
-            } else {
-                matchPosition = entry.key.range(of: normalizedInput, options: .caseInsensitive)?.lowerBound.utf16Offset(in: entry.key)
-                editDistance = levenshteinDistance(from: entry.key, to: normalizedInput)
-            }
-            
+        return sortedHits.map { annotatedEntry in
             return HangulSearchHit(
-                item: entry.item,
-                matchKinds: entry.matchKinds,
-                matchPosition: matchPosition,
-                editDistance: editDistance
+                item: annotatedEntry.entry.item,
+                matchKinds: annotatedEntry.entry.matchKinds,
+                matchPosition: annotatedEntry.matchPosition,
+                editDistance: annotatedEntry.editDistance
             )
         }
     }
@@ -335,9 +328,49 @@ extension HangulSearch {
     }
     
     private func searchEntries(input: String, mode: HangulSearchMode, context: SearchContext) -> [SearchEntry] {
-        return searchHitEntries(input: input, mode: mode, context: context).map { hit in
-            (item: hit.item, key: hit.key)
+        switch mode {
+        case .containsMatch:
+            return searchByFullChar(input: input, entries: context.items)
+        case .chosungAndFullMatch:
+            if isPureChosung(input: input) {
+                return searchByChosung(input: input, entries: context.chosung)
+            }
+            return searchByFullChar(input: input, entries: context.items)
+        case .autocomplete:
+            return searchByAutocomplete(input: input, entries: context.decomposed)
+        case .combined:
+            return searchByCombinedEntries(input: input, context: context)
         }
+    }
+    
+    private func searchByCombinedEntries(input: String, context: SearchContext) -> [SearchEntry] {
+        var results = [SearchEntry]()
+        
+        let appendIfNeeded: (SearchEntry) -> Void = { entry in
+            if self.findCombinedIndex(for: entry, in: results) == nil {
+                results.append(entry)
+            }
+        }
+        
+        searchByFullChar(input: input, entries: context.items).forEach(appendIfNeeded)
+        
+        if isPureChosung(input: input) {
+            searchByChosung(input: input, entries: context.chosung).forEach(appendIfNeeded)
+        }
+        
+        searchByAutocomplete(input: input, entries: context.decomposed).forEach(appendIfNeeded)
+        
+        return results
+    }
+    
+    private func findCombinedIndex(for entry: SearchEntry, in entries: [SearchEntry]) -> Int? {
+        if let customIsEqual = isEqual {
+            return entries.firstIndex { otherEntry in
+                otherEntry.key == entry.key && customIsEqual(otherEntry.item, entry.item)
+            }
+        }
+        
+        return entries.firstIndex(where: { $0.key == entry.key })
     }
     
     private func searchHitEntries(input: String, mode: HangulSearchMode, context: SearchContext) -> [HitEntry] {
@@ -482,33 +515,55 @@ extension HangulSearch {
     }
     
     private func sortEntries(_ entries: [SearchEntry], by sortMode: SortMode, input: String) -> [SearchEntry] {
-        switch sortMode {
-        case .hangulOrder:
-            return sortEntriesByHangulOrder(entries: entries)
-        case .hangulOrderReversed:
-            return sortEntriesByHangulOrderReversed(entries: entries)
-        case .editDistance:
-            return sortEntriesByEditDistance(to: input, entries: entries)
-        case .matchPosition:
-            return sortEntriesByMatchPosition(input: input, entries: entries)
-        case .none:
-            return entries
+        return sortByMode(entries, by: sortMode, input: input, keySelector: { $0.key })
+    }
+    
+    private func annotateHitEntries(_ entries: [HitEntry], input: String) -> [AnnotatedHitEntry] {
+        if input.isEmpty {
+            return entries.map { entry in
+                (entry: entry, matchPosition: nil, editDistance: nil)
+            }
+        }
+        
+        return entries.map { entry in
+            let matchPosition = entry.key.range(of: input, options: .caseInsensitive)?.lowerBound.utf16Offset(in: entry.key)
+            let editDistance = levenshteinDistance(from: entry.key, to: input)
+            return (entry: entry, matchPosition: matchPosition, editDistance: editDistance)
         }
     }
     
-    private func sortHitEntries(_ entries: [HitEntry], by sortMode: SortMode, input: String) -> [HitEntry] {
+    private func sortAnnotatedHitEntries(_ entries: [AnnotatedHitEntry], by sortMode: SortMode, input: String) -> [AnnotatedHitEntry] {
+        return sortByMode(
+            entries,
+            by: sortMode,
+            input: input,
+            keySelector: { $0.entry.key },
+            precomputedMatchPosition: { $0.matchPosition },
+            precomputedEditDistance: { $0.editDistance }
+        )
+    }
+    
+    private func sortByMode<Entry>(
+        _ entries: [Entry],
+        by sortMode: SortMode,
+        input: String,
+        keySelector: (Entry) -> String,
+        precomputedMatchPosition: ((Entry) -> Int?)? = nil,
+        precomputedEditDistance: ((Entry) -> Int?)? = nil
+    ) -> [Entry] {
         switch sortMode {
         case .hangulOrder:
             return entries.sorted {
-                $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending
+                keySelector($0).localizedCaseInsensitiveCompare(keySelector($1)) == .orderedAscending
             }
         case .hangulOrderReversed:
             return entries.sorted {
-                $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedDescending
+                keySelector($0).localizedCaseInsensitiveCompare(keySelector($1)) == .orderedDescending
             }
         case .editDistance:
             let scoredEntries = entries.enumerated().map { index, entry in
-                (index: index, entry: entry, distance: levenshteinDistance(from: entry.key, to: input))
+                let distance = precomputedEditDistance?(entry) ?? levenshteinDistance(from: keySelector(entry), to: input)
+                return (index: index, entry: entry, distance: distance)
             }
             
             return scoredEntries.sorted { lhs, rhs in
@@ -519,7 +574,10 @@ extension HangulSearch {
             }.map { $0.entry }
         case .matchPosition:
             let scoredEntries = entries.enumerated().map { index, entry in
-                let matchIndex = entry.key.range(of: input, options: .caseInsensitive)?.lowerBound.utf16Offset(in: entry.key) ?? Int.max
+                let matchIndex = precomputedMatchPosition?(entry) ??
+                    keySelector(entry).range(of: input, options: .caseInsensitive)?.lowerBound.utf16Offset(in: keySelector(entry)) ??
+                    Int.max
+                
                 return (index: index, entry: entry, matchIndex: matchIndex)
             }
             
@@ -532,42 +590,6 @@ extension HangulSearch {
         case .none:
             return entries
         }
-    }
-    
-    /// 항목들을 한글 자모 순서대로 정렬
-    /// - Parameter entries: 정렬할 항목 배열
-    /// - Returns: 정렬된 항목 배열
-    private func sortEntriesByHangulOrder(entries: [SearchEntry]) -> [SearchEntry] {
-        return entries.sorted {
-            $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending
-        }
-    }
-    
-    /// 항목들을 한글 자모 역순으로 정렬
-    /// - Parameter entries: 정렬할 항목 배열
-    /// - Returns: 정렬된 항목 배열
-    private func sortEntriesByHangulOrderReversed(entries: [SearchEntry]) -> [SearchEntry] {
-        return entries.sorted {
-            $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedDescending
-        }
-    }
-    
-    /// 검색 입력에 대해 편집 거리를 기반으로 항목을 정렬
-    /// - Parameters:
-    ///   - target: 검색어
-    ///   - entries: 정렬할 항목 배열
-    /// - Returns: 정렬된 항목 배열
-    private func sortEntriesByEditDistance(to target: String, entries: [SearchEntry]) -> [SearchEntry] {
-        let scoredEntries = entries.enumerated().map { index, entry in
-            (index: index, entry: entry, distance: levenshteinDistance(from: entry.key, to: target))
-        }
-        
-        return scoredEntries.sorted { lhs, rhs in
-            if lhs.distance == rhs.distance {
-                return lhs.index < rhs.index
-            }
-            return lhs.distance < rhs.distance
-        }.map { $0.entry }
     }
     
     /// 레벤슈타인 편집 거리 계산 함수
@@ -607,25 +629,6 @@ extension HangulSearch {
         }
         
         return distanceMatrix[m][n]
-    }
-    
-    /// 입력 문자열과 일치하는 위치를 기준으로 항목을 정렬
-    /// - Parameters:
-    ///   - input: 검색어
-    ///   - entries: 정렬할 항목 배열
-    /// - Returns: 일치하는 위치를 기준으로 정렬된 항목 배열
-    private func sortEntriesByMatchPosition(input: String, entries: [SearchEntry]) -> [SearchEntry] {
-        let scoredEntries = entries.enumerated().map { index, entry in
-            let matchIndex = entry.key.range(of: input, options: .caseInsensitive)?.lowerBound.utf16Offset(in: entry.key) ?? Int.max
-            return (index: index, entry: entry, matchIndex: matchIndex)
-        }
-        
-        return scoredEntries.sorted { lhs, rhs in
-            if lhs.matchIndex == rhs.matchIndex {
-                return lhs.index < rhs.index
-            }
-            return lhs.matchIndex < rhs.matchIndex
-        }.map { $0.entry }
     }
     
     private func applyPagination<Entry>(to entries: [Entry], offset: Int, limit: Int?) -> [Entry] {
