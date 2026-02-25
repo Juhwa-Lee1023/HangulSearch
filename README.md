@@ -1,23 +1,18 @@
 # HangulSearch
 [![stability-beta](https://img.shields.io/badge/stability-beta-33bbff.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#beta)
 
-`HangulSearch`는 Swift 기반 한글 검색 라이브러리입니다.  
-초성 검색, 일반 문자열 검색, 자동 완성 검색, 복합 검색을 지원하며 결과 정렬/옵션/메타데이터 API를 제공합니다.
-
-## 지원 환경
-- iOS 11.0 이상
-- macOS 10.13 이상
-- watchOS 4.0 이상
-- tvOS 11.0 이상
+Swift에서 한글 검색을 구현할 때 바로 사용할 수 있는 라이브러리입니다.
 
 ## 설치
-### Xcode에서 추가
-1. Xcode 상단 메뉴에서 **File > Swift Packages > Add Package Dependency...**를 선택합니다.
-2. 저장소 URL `https://github.com/Juhwa-Lee1023/HangulSearch`를 입력합니다.
-3. 브랜치 또는 버전 규칙을 선택합니다.
-4. 패키지 추가를 완료합니다.
 
-## 빠른 시작
+### Xcode (Swift Package Manager)
+
+1. `File > Swift Packages > Add Package Dependency...`
+2. 저장소 URL 입력: `https://github.com/Juhwa-Lee1023/HangulSearch`
+3. 버전 규칙 선택 후 추가
+
+## 기본 사용
+
 ```swift
 import HangulSearch
 
@@ -35,153 +30,223 @@ let people = [
 let engine = HangulSearch(
     items: people,
     searchMode: .combined,
+    sortMode: .none,
+    keySelector: { $0.name }
+)
+
+let results = engine.searchItems(input: "철수")
+print(results.map(\.name))
+```
+
+## 검색 모드
+
+사용 가능한 검색 모드:
+
+- `.containsMatch`: 입력 문자열이 원문에 포함되면 매칭합니다. 일반적인 부분 문자열 검색에 사용합니다.
+- `.chosungAndFullMatch`: 입력이 순수 초성(예: `ㅊㅅ`)이면 초성 검색으로, 그 외에는 일반 문자열 검색으로 동작합니다.
+- `.autocomplete`: 입력 문자열을 자동완성 형태로 해석해 매칭합니다.
+- `.combined`: `contains/chosung/autocomplete` 결과를 합쳐 반환합니다.
+
+추천 사용 케이스:
+
+1. `.containsMatch`: 주소록/회원 목록처럼 "일부 문자열 포함" 검색이 필요한 경우
+2. `.chosungAndFullMatch`: 초성 검색과 일반 검색을 하나의 입력창에서 함께 처리하고 싶은 경우
+3. `.autocomplete`: 검색창 입력 중간 단계에서 후보를 빠르게 보여주고 싶은 경우
+4. `.combined`: 사용자가 초성/완성형/자동완성 패턴을 섞어 입력하는 통합 검색창
+
+실전 예시:
+
+```swift
+// containsMatch: 이름 일부 검색
+let containsCase = containsEngine.searchItems(input: "영희")
+
+// chosungAndFullMatch: 초성 또는 일반 검색을 같은 창에서 처리
+let chosungCase = chosungEngine.searchItems(input: "ㅊㅅ")
+
+// autocomplete: 타이핑 중 추천 목록
+let autocompleteCase = autoEngine.searchItems(input: "철")
+
+// combined: 입력 패턴이 섞여도 하나의 모드로 처리
+let combinedCase = engine.searchItems(input: "ㅊㅅ")
+```
+
+```swift
+// 1) 문자열 포함 검색
+let containsEngine = HangulSearch(
+    items: people,
+    searchMode: .containsMatch,
+    sortMode: .none,
+    keySelector: { $0.name }
+)
+let containsResults = containsEngine.searchItems(input: "철수")
+
+// 2) 초성 검색 (입력이 순수 초성일 때)
+let chosungEngine = HangulSearch(
+    items: people,
+    searchMode: .chosungAndFullMatch,
+    sortMode: .none,
+    keySelector: { $0.name }
+)
+let chosungResults = chosungEngine.searchItems(input: "ㅊㅅ")
+
+// 3) 자동 완성 검색
+let autoEngine = HangulSearch(
+    items: people,
+    searchMode: .autocomplete,
+    sortMode: .none,
+    keySelector: { $0.name }
+)
+let autoResults = autoEngine.searchItems(input: "철")
+
+// 4) 종합 검색
+let combinedResults = engine.searchItems(input: "ㅊㅅ")
+```
+
+## 정렬 사용
+
+```swift
+let sortedEngine = HangulSearch(
+    items: people,
+    searchMode: .containsMatch,
     sortMode: .matchPosition,
-    keySelector: { $0.name },
-    isEqual: { $0.age == $1.age }
+    keySelector: { $0.name }
 )
 
-let legacyResults = engine.searchItems(input: "ㅊㅅ")
-let optionResults = engine.searchItems(
-    input: "철수",
-    options: HangulSearchOptions(limit: 10, offset: 0)
+let sorted = sortedEngine.searchItems(input: "이")
+```
+
+사용 가능한 정렬 모드:
+
+- `.none`: 검색 결과 순서를 변경하지 않습니다.
+- `.hangulOrder`: 한글 사전순(오름차순)으로 정렬합니다.
+- `.hangulOrderReversed`: 한글 사전순(내림차순)으로 정렬합니다.
+- `.editDistance`: 입력과의 편집 거리(Levenshtein)가 작은 항목을 우선합니다.
+- `.matchPosition`: 매칭 시작 위치가 앞쪽인 항목을 우선합니다.
+
+추천 사용 케이스:
+
+1. `.none`: 서버 랭킹이나 원본 데이터 순서를 그대로 유지해야 하는 경우
+2. `.hangulOrder`: 가나다순 목록 화면처럼 알파벳/한글 정렬이 필요한 경우
+3. `.hangulOrderReversed`: 역순 목록(하단 문자부터)으로 탐색하는 화면
+4. `.editDistance`: 오타가 많은 자유 입력 검색에서 유사도 중심 정렬이 필요한 경우
+5. `.matchPosition`: 접두어 매칭(앞부분 일치) 결과를 우선 노출하고 싶은 경우
+
+실전 예시:
+
+```swift
+let noneSorted = HangulSearch(
+    items: people,
+    searchMode: .containsMatch,
+    sortMode: .none,
+    keySelector: { $0.name }
+).searchItems(input: "이")
+
+let hangulSorted = HangulSearch(
+    items: people,
+    searchMode: .containsMatch,
+    sortMode: .hangulOrder,
+    keySelector: { $0.name }
+).searchItems(input: "이")
+
+let editDistanceSorted = HangulSearch(
+    items: people,
+    searchMode: .containsMatch,
+    sortMode: .editDistance,
+    keySelector: { $0.name }
+).searchItems(input: "이쳘수")
+```
+
+## 옵션 API 사용
+
+자주 쓰는 옵션:
+
+- `mode`: 엔진 기본 모드 대신 이번 검색에만 모드를 덮어씁니다.
+- `sortMode`: 엔진 기본 정렬 대신 이번 검색에만 정렬 기준을 덮어씁니다.
+- `limit` / `offset`: 결과 개수 제한과 페이지네이션을 설정합니다.
+- `minInputLength`: 너무 짧은 입력(예: 1글자)에서 검색을 제한할 수 있습니다.
+- `normalizeToNFC`: 유니코드 정규화(NFC) 기준으로 입력/데이터를 맞춰 검색 안정성을 높입니다.
+- `emptyQueryBehavior`: 빈 입력일 때 `[]` 또는 전체 결과 반환을 선택합니다.
+
+추천 조합 프리셋:
+
+1. 빠른 자동완성: `mode: .autocomplete`, `sortMode: .matchPosition`, `limit: 10`
+2. 정확도 우선 검색: `mode: .combined`, `sortMode: .editDistance`, `normalizeToNFC: true`
+3. 목록 탐색형 검색: `emptyQueryBehavior: .returnAll`, `limit`/`offset`으로 페이지네이션
+
+```swift
+// 기본 예시
+let options = HangulSearchOptions(
+    mode: .combined,
+    sortMode: .editDistance,
+    limit: 10,
+    offset: 0,
+    minInputLength: 1,
+    normalizeToNFC: true,
+    emptyQueryBehavior: .returnEmpty
 )
-let hits = engine.searchHits(
-    input: "철수",
-    options: HangulSearchOptions(sortMode: .editDistance)
+
+let optionResults = engine.searchItems(input: "철수", options: options)
+
+// 1) 빠른 자동완성 프리셋
+let quickAutocomplete = HangulSearchOptions(
+    mode: .autocomplete,
+    sortMode: .matchPosition,
+    limit: 10,
+    minInputLength: 1
 )
-```
+let quickResults = engine.searchItems(input: "철", options: quickAutocomplete)
 
-## 공개 API
-### 생성자
-```swift
-public init(
-    items: [T],
-    searchMode: HangulSearchMode = .chosungAndFullMatch,
-    sortMode: SortMode = .none,
-    keySelector: @escaping (T) -> String,
-    isEqual: ((T, T) -> Bool)? = nil
+// 2) 정확도 우선 프리셋
+let accuracyFirst = HangulSearchOptions(
+    mode: .combined,
+    sortMode: .editDistance,
+    normalizeToNFC: true,
+    minInputLength: 1
 )
+let accuracyResults = engine.searchItems(input: "이쳘수", options: accuracyFirst)
+
+// 3) 목록 탐색형 프리셋 (빈 검색 허용 + 페이지네이션)
+let browseMode = HangulSearchOptions(
+    mode: .containsMatch,
+    sortMode: .hangulOrder,
+    limit: 20,
+    offset: 0,
+    emptyQueryBehavior: .returnAll
+)
+let browseResults = engine.searchItems(input: "", options: browseMode)
 ```
 
-### 검색
-```swift
-public func searchItems(input: String) -> [T]
-public func searchItems(input: String, options: HangulSearchOptions) -> [T]
-public func searchHits(input: String, options: HangulSearchOptions) -> [HangulSearchHit<T>]
-```
+## 상세 결과 API (`searchHits`)
 
-### 갱신/설정 변경
 ```swift
-public func changeItems(items: [T])
-public func addItems(items: [T])
-public func changeSearchMode(mode: HangulSearchMode)
-public func changeKeySelector(keySelector: @escaping (T) -> String)
-public func changeSortMode(mode: SortMode)
-```
+let hitOptions = HangulSearchOptions(sortMode: .matchPosition)
+let hits = engine.searchHits(input: "철수", options: hitOptions)
 
-## 옵션 타입
-### `HangulSearchOptions`
-```swift
-public struct HangulSearchOptions {
-    public enum EmptyQueryBehavior { case returnEmpty, returnAll }
-
-    public var mode: HangulSearchMode?
-    public var sortMode: SortMode?
-    public var limit: Int?
-    public var offset: Int
-    public var minInputLength: Int
-    public var normalizeToNFC: Bool
-    public var emptyQueryBehavior: EmptyQueryBehavior
+for hit in hits {
+    print(hit.item.name)
+    print(hit.matchKinds)      // [.fullMatch] 등
+    print(hit.matchPosition)   // Int?
+    print(hit.editDistance)    // Int?
 }
 ```
 
-기본값(1.x 호환):
-- `mode: nil` (엔진 기본 모드 사용)
-- `sortMode: nil` (엔진 기본 정렬 사용)
-- `limit: nil` (제한 없음)
-- `offset: 0`
-- `minInputLength: 1`
-- `normalizeToNFC: false` (legacy 동작 유지)
-- `emptyQueryBehavior: .returnEmpty` (legacy 동작 유지)
+## 데이터/설정 변경
 
-### `HangulSearchHit<Item>`
-- `item`: 원본 항목
-- `matchKinds`: 매칭 종류 집합 (`.fullMatch`, `.chosungMatch`, `.autocompleteMatch`)
-- `matchPosition`: `SortMode.matchPosition` 기준이 되는 시작 위치(없으면 `nil`)
-- `editDistance`: `SortMode.editDistance` 계산값(없으면 `nil`)
+```swift
+engine.changeItems(items: [
+    Person(name: "홍길동", age: 20),
+    Person(name: "김영희", age: 22)
+])
 
-## 검색 모드
-### `containsMatch`
-- `keySelector(item)` 값에 입력 문자열이 포함되는 항목을 검색합니다.
-- 문자열 비교는 대소문자를 구분하지 않습니다.
+engine.addItems(items: [
+    Person(name: "장철수", age: 31)
+])
 
-### `chosungAndFullMatch`
-- 입력이 순수 초성(예: `ㅊㅅ`)이면 초성 검색을 수행합니다.
-- 입력이 초성이 아니면 `containsMatch`와 동일하게 동작합니다.
-
-### `autocomplete`
-- 입력/항목 문자열을 한글 자모로 분해한 뒤 포함 여부를 비교합니다.
-
-### `combined`
-- 전체 문자열 검색, 초성 검색(순수 초성 입력 시), 자동 완성 검색 결과를 순서대로 결합합니다.
-- 중복 제거 키는 `keySelector` 결과이며, `isEqual`이 제공되면 추가 비교를 수행합니다.
-
-## 정렬 모드
-### `none`
-- 입력 순서를 유지합니다.
-
-### `hangulOrder`
-- 한글 자모 기준 오름차순 정렬입니다.
-
-### `hangulOrderReversed`
-- 한글 자모 기준 내림차순 정렬입니다.
-
-### `editDistance`
-- 검색어와 항목 문자열의 Levenshtein distance 오름차순 정렬입니다.
-
-### `matchPosition`
-- 항목 내에서 검색어가 처음 일치하는 위치 오름차순 정렬입니다.
-
-## 동작 계약 (1.x)
-- 기존 API `searchItems(input:)`는 유지되며 기본 동작을 보존합니다.
-- 기본 옵션에서 빈 입력은 빈 배열을 반환합니다.
-- `searchItems(input:options:)` / `searchHits(input:options:)`는 Additive API입니다.
-- `editDistance`/`matchPosition` 동률은 원본 검색 결과 순서를 tie-break로 사용합니다.
-- `combined` 모드는 결과 중복 제거 후 `matchKinds`를 병합합니다.
-- `normalizeToNFC`는 opt-in이며 기본값 `false`로 legacy 동작을 유지합니다.
-
-## 성능 및 가변성 참고
-- `changeItems`, `addItems`, `changeSearchMode`, `changeKeySelector` 호출 시 내부 전처리 캐시를 다시 구성합니다.
-- 검색 입력이 동일해도 `sortMode`가 `editDistance`/`matchPosition`이면 입력 기준 계산 비용이 추가됩니다.
-- `searchHits`는 정렬에 필요한 메타데이터를 한 번 계산해 결과에 재사용합니다.
-
-## CI / 품질 게이트
-- Pull Request 및 `main`/`codex/**` push에서 아래 잡을 실행합니다.
-- `swift test --parallel`
-- `swift test -c release`
-- `swift test --sanitize=thread`
-- benchmark smoke (`HangulSearchBenchmarkSmokeTests`)
-
-## 참고 자료
-- [테스트 데이터](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/MockData/people.json)
-- [기본 테스트](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/HangulSearchTests.swift)
-- [옵션 API 테스트](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/HangulSearchOptionsSearchTests.swift)
-- [상세 결과 API 테스트](https://github.com/Juhwa-Lee1023/HangulSearch/blob/main/Tests/HangulSearchTests/HangulSearchHitsTests.swift)
-
-## 운영 문서
-- [CHANGELOG](CHANGELOG.md)
-- [MIGRATION](MIGRATION.md)
-- [CONTRIBUTING](CONTRIBUTING.md)
-- [SECURITY](SECURITY.md)
-
-## 데모 영상
-- 초성 검색: https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/9f5e0f28-d8ab-4010-9b58-79eafb35b798
-- 전체 문자열 검색: https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/8bdc8091-03d9-4c84-b56a-8f58cc5ef8f1
-- 자동 완성 검색: https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/d8d3693b-0dc0-49e9-8117-df131ec20154
-- 종합 검색 모드: https://github.com/Juhwa-Lee1023/HangulSearch/assets/63584245/94652207-6896-488f-af8c-db273312becd
-
-## 기여
-이슈 등록 또는 Pull Request를 통해 기여할 수 있습니다.
+engine.changeSearchMode(mode: .combined)
+engine.changeSortMode(mode: .hangulOrder)
+engine.changeKeySelector { $0.name }
+```
 
 ## 라이선스
-이 프로젝트는 MIT 라이선스를 따릅니다. 자세한 내용은 [LICENSE](LICENSE)를 참고하세요.
+
+MIT License. 자세한 내용은 [LICENSE](LICENSE)를 참고하세요.
