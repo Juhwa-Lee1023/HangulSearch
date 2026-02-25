@@ -1,6 +1,15 @@
 import Foundation
 
 public class HangulSearch<T> {
+    private typealias SearchEntry = (item: T, key: String)
+    private typealias ProcessedSearchEntry = (item: T, key: String, originalKey: String)
+    
+    private struct SearchContext {
+        let items: [SearchEntry]
+        let chosung: [ProcessedSearchEntry]
+        let decomposed: [ProcessedSearchEntry]
+    }
+    
     private let 초성_리스트: [Character] = [
         "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ",
         "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"
@@ -37,11 +46,15 @@ public class HangulSearch<T> {
     
     /// 초성 분해된 항목들
     /// - 각 항목의 키(key)는 초성으로 분해된 문자열입니다.
-    private var processedItemsChosung: [(item: T, key: String)] = []
+    private var processedItemsChosung: [ProcessedSearchEntry] = []
     
     /// 복합 분해된 항목들
     /// - 각 항목의 키(key)는 복합 분해된 문자열입니다.
-    private var processedItemsDecomposed: [(item: T, key: String)] = []
+    private var processedItemsDecomposed: [ProcessedSearchEntry] = []
+    
+    /// 원본 키 캐시
+    /// - normalizeToNFC가 false인 기본 경로에서 재사용합니다.
+    private var cachedItems: [SearchEntry] = []
     
     /// 검색을 수행할 선택자를 선택
     private var keySelector: (T) -> String
@@ -72,40 +85,41 @@ public class HangulSearch<T> {
     /// - Parameter input: 검색어
     /// - Returns: 검색 결과로서, 검색어에 맞는 항목의 배열을 반환
     public func searchItems(input: String) -> [T] {
-        if input.isEmpty {
-            // 검색 모드와 관계없이 빈 입력은 빈 결과로 취급합니다.
+        return searchItems(input: input, options: HangulSearchOptions())
+    }
+    
+    /// 옵션을 적용하여 검색을 수행합니다.
+    /// - Parameters:
+    ///   - input: 검색어
+    ///   - options: 검색 옵션
+    /// - Returns: 검색 결과로서, 검색어에 맞는 항목의 배열을 반환
+    public func searchItems(input: String, options: HangulSearchOptions) -> [T] {
+        let normalizedInput = normalizeIfNeeded(input, enabled: options.normalizeToNFC)
+        let minimumInputLength = max(0, options.minInputLength)
+        
+        if normalizedInput.isEmpty, options.emptyQueryBehavior == .returnEmpty {
             return []
         }
         
-        var results: [T]
-        // 검색 모드에 따라 적절한 검색 메서드를 선택하여 결과를 반환
-        switch searchMode {
-        case .containsMatch:
-            results = searchByFullChar(input: input)
-        case .chosungAndFullMatch:
-            // 검색어에 따라 어떤 검색을 수행할지 결정. 초성으로만 되어 있지 않으면, 일치하는 문자열 기반 검색 수행
-            results = isPureChosung(input: input) ? searchByChosung(input: input) : searchByFullChar(input: input)
-        case .autocomplete:
-            results = searchByAutocomplete(input: input)
-        case .combined:
-            results = searchByCombined(input: input)
+        if !normalizedInput.isEmpty, normalizedInput.count < minimumInputLength {
+            return []
         }
         
-        // 정렬 로직 적용
-        switch sortMode {
-        case .hangulOrder:
-            results = sortItemsByHangulOrder(items: results)
-        case .hangulOrderReversed:
-            results = sortItemsByHangulOrderReversed(items: results)
-        case .editDistance:
-            results = sortItemsByEditDistance(to: input, items: results)
-        case .matchPosition:
-            results = sortItemsByMatchPosition(input: input, items: results)
-        case .none:
-            break
+        let effectiveMode = options.mode ?? searchMode
+        let effectiveSortMode = options.sortMode ?? sortMode
+        let context = buildSearchContext(mode: effectiveMode, normalizeToNFC: options.normalizeToNFC)
+        let results: [SearchEntry]
+        
+        if normalizedInput.isEmpty {
+            results = context.items
+        } else {
+            results = searchEntries(input: normalizedInput, mode: effectiveMode, context: context)
         }
         
-        return results
+        var finalResults = sortEntries(results, by: effectiveSortMode, input: normalizedInput)
+        finalResults = applyPagination(to: finalResults, offset: options.offset, limit: options.limit)
+        
+        return finalResults.map(\.item)
     }
     
     /// 검색을 수행할 데이터를 변경, 변경된 항목에 대해 사전 처리를 수행
@@ -150,47 +164,21 @@ extension HangulSearch {
         // 모드 전환 시 이전 전처리 결과가 남지 않도록 캐시를 초기화합니다.
         processedItemsChosung = []
         processedItemsDecomposed = []
+        cachedItems = buildBaseEntries(normalizeToNFC: false)
         
         switch searchMode {
         case .chosungAndFullMatch:
             // 초성 모드일 때는 초성 키로 매핑하여 처리
-            processedItemsChosung = items.map { item in
-                let key = keySelector(item)
-                let chosungKey = key.compactMap { char -> Character? in
-                    if let index = getChosungIndex(char) {
-                        return 초성_리스트[index]
-                    }
-                    return nil
-                }.map { String($0) }.joined()
-                return (item, chosungKey)
-            }
+            processedItemsChosung = buildChosungEntries(from: cachedItems)
             
         case .autocomplete:
             // 자동 완성 모드일 때는 한글을 분해하여 처리
-            processedItemsDecomposed = items.map { item in
-                let key = keySelector(item)
-                let decomposedKey = key.flatMap(decomposeKorean).map { String($0) }.joined()
-                return (item, decomposedKey)
-            }
+            processedItemsDecomposed = buildDecomposedEntries(from: cachedItems)
             
         case .combined:
             // 종합 모드일 때는 초성 매핑과 한글 분해를 둘 다 수행
-            processedItemsChosung = items.map { item in
-                let key = keySelector(item)
-                let chosungKey = key.compactMap { char -> Character? in
-                    if let index = getChosungIndex(char) {
-                        return 초성_리스트[index]
-                    }
-                    return nil
-                }.map { String($0) }.joined()
-                return (item, chosungKey)
-            }
-            
-            processedItemsDecomposed = items.map { item in
-                let key = keySelector(item)
-                let decomposedKey = key.flatMap(decomposeKorean).map { String($0) }.joined()
-                return (item, decomposedKey)
-            }
+            processedItemsChosung = buildChosungEntries(from: cachedItems)
+            processedItemsDecomposed = buildDecomposedEntries(from: cachedItems)
             
         default:
             // containsMatch 모드의 경우 사전 작업을 수행하지 않음
@@ -198,42 +186,151 @@ extension HangulSearch {
         }
     }
     
+    private func buildSearchContext(mode: HangulSearchMode, normalizeToNFC: Bool) -> SearchContext {
+        if normalizeToNFC {
+            let baseEntries = buildBaseEntries(normalizeToNFC: true)
+            switch mode {
+            case .containsMatch:
+                return SearchContext(items: baseEntries, chosung: [], decomposed: [])
+            case .chosungAndFullMatch:
+                return SearchContext(items: baseEntries, chosung: buildChosungEntries(from: baseEntries), decomposed: [])
+            case .autocomplete:
+                return SearchContext(items: baseEntries, chosung: [], decomposed: buildDecomposedEntries(from: baseEntries))
+            case .combined:
+                return SearchContext(
+                    items: baseEntries,
+                    chosung: buildChosungEntries(from: baseEntries),
+                    decomposed: buildDecomposedEntries(from: baseEntries)
+                )
+            }
+        }
+        
+        let baseEntries = cachedItems.isEmpty ? buildBaseEntries(normalizeToNFC: false) : cachedItems
+        
+        if mode == searchMode {
+            switch mode {
+            case .containsMatch:
+                return SearchContext(items: baseEntries, chosung: [], decomposed: [])
+            case .chosungAndFullMatch:
+                return SearchContext(items: baseEntries, chosung: processedItemsChosung, decomposed: [])
+            case .autocomplete:
+                return SearchContext(items: baseEntries, chosung: [], decomposed: processedItemsDecomposed)
+            case .combined:
+                return SearchContext(items: baseEntries, chosung: processedItemsChosung, decomposed: processedItemsDecomposed)
+            }
+        }
+        
+        switch mode {
+        case .containsMatch:
+            return SearchContext(items: baseEntries, chosung: [], decomposed: [])
+        case .chosungAndFullMatch:
+            return SearchContext(items: baseEntries, chosung: buildChosungEntries(from: baseEntries), decomposed: [])
+        case .autocomplete:
+            return SearchContext(items: baseEntries, chosung: [], decomposed: buildDecomposedEntries(from: baseEntries))
+        case .combined:
+            return SearchContext(
+                items: baseEntries,
+                chosung: buildChosungEntries(from: baseEntries),
+                decomposed: buildDecomposedEntries(from: baseEntries)
+            )
+        }
+    }
+    
+    private func buildBaseEntries(normalizeToNFC: Bool) -> [SearchEntry] {
+        return items.map { item in
+            let key = normalizeIfNeeded(keySelector(item), enabled: normalizeToNFC)
+            return (item: item, key: key)
+        }
+    }
+    
+    private func normalizeIfNeeded(_ value: String, enabled: Bool) -> String {
+        if enabled {
+            return value.precomposedStringWithCanonicalMapping
+        }
+        return value
+    }
+    
+    private func buildChosungEntries(from entries: [SearchEntry]) -> [ProcessedSearchEntry] {
+        return entries.map { entry in
+            (item: entry.item, key: makeChosungKey(from: entry.key), originalKey: entry.key)
+        }
+    }
+    
+    private func makeChosungKey(from key: String) -> String {
+        return key.compactMap { char -> Character? in
+            if let index = getChosungIndex(char) {
+                return 초성_리스트[index]
+            }
+            return nil
+        }.map(String.init).joined()
+    }
+    
+    private func buildDecomposedEntries(from entries: [SearchEntry]) -> [ProcessedSearchEntry] {
+        return entries.map { entry in
+            (item: entry.item, key: makeDecomposedKey(from: entry.key), originalKey: entry.key)
+        }
+    }
+    
+    private func makeDecomposedKey(from key: String) -> String {
+        return key.flatMap(decomposeKorean).map(String.init).joined()
+    }
+    
+    private func searchEntries(input: String, mode: HangulSearchMode, context: SearchContext) -> [SearchEntry] {
+        // 검색 모드에 따라 적절한 검색 메서드를 선택하여 결과를 반환
+        switch mode {
+        case .containsMatch:
+            return searchByFullChar(input: input, entries: context.items)
+        case .chosungAndFullMatch:
+            // 검색어에 따라 어떤 검색을 수행할지 결정. 초성으로만 되어 있지 않으면, 일치하는 문자열 기반 검색 수행
+            return isPureChosung(input: input)
+                ? searchByChosung(input: input, entries: context.chosung)
+                : searchByFullChar(input: input, entries: context.items)
+        case .autocomplete:
+            return searchByAutocomplete(input: input, entries: context.decomposed)
+        case .combined:
+            return searchByCombined(input: input, context: context)
+        }
+    }
+    
     /// 초성 검색을 수행하여 입력된 초성을 포함하는 항목을 반환
     /// - Parameter input: 검색어로 사용된 초성
     /// - Returns: 입력된 초성을 포함하는 항목의 배열을 반환
-    private func searchByChosung(input: String) -> [T] {
-        let results = processedItemsChosung.filter { _, key in
+    private func searchByChosung(input: String, entries: [ProcessedSearchEntry]) -> [SearchEntry] {
+        return entries.filter { _, key, _ in
             key.contains(input)
-        }.map { $0.item }
-        return results
+        }.map { entry in
+            (item: entry.item, key: entry.originalKey)
+        }
     }
     
     /// 완전 일치 검색을 수행하여 입력된 문자열을 포함하는 항목을 반환
     /// - Parameter input: 검색어로 사용될 문자열
     /// - Returns: 입력된 문자열을 포함하는 항목의 배열을 반환
-    private func searchByFullChar(input: String) -> [T] {
-        return items.filter { item in
-            keySelector(item).localizedCaseInsensitiveContains(input)
+    private func searchByFullChar(input: String, entries: [SearchEntry]) -> [SearchEntry] {
+        return entries.filter { _, key in
+            key.localizedCaseInsensitiveContains(input)
         }
     }
     
     /// 자동 완성 검색을 수행하여 입력된 문자열을 포함하는 항목을 반환
     /// - Parameter input: 검색어로 사용될 문자열
     /// - Returns: 입력된 문자열을 포함하는 항목의 배열을 반환
-    private func searchByAutocomplete(input: String) -> [T] {
+    private func searchByAutocomplete(input: String, entries: [ProcessedSearchEntry]) -> [SearchEntry] {
         let decomposedInput = input.flatMap(decomposeKorean).map { String($0) }.joined()
         
-        return processedItemsDecomposed.filter { _, decomposedKey in
+        return entries.filter { _, decomposedKey, _ in
             decomposedKey.localizedCaseInsensitiveContains(decomposedInput)
-        }.map { $0.item }
+        }.map { entry in
+            (item: entry.item, key: entry.originalKey)
+        }
     }
     
     /// 종합 검색을 수행하여 여러 검색 모드의 결과를 결합하여 반환
     /// - Parameter input: 검색어로 사용될 문자열
     /// - Returns: 입력된 초성 및 자동 완성에 해당하는 항목의 배열을 반환
-    private func searchByCombined(input: String) -> [T] {
-        var results = [T]()
-        let fullMatchResults = searchByFullChar(input: input)
+    private func searchByCombined(input: String, context: SearchContext) -> [SearchEntry] {
+        var results = [SearchEntry]()
+        let fullMatchResults = searchByFullChar(input: input, entries: context.items)
         
         // 중복 검사는 두 가지 방식으로 수행될 수 있음
         // 1. 사용자가 `isEqual` 클로저를 제공한 경우: 이 클로저는 `keySelector` 결과와 추가적으로 비교를 위해 선언한 선택자를 이용해
@@ -242,17 +339,17 @@ extension HangulSearch {
         //
         // `isUnique` 변수는 주어진 아이템이 결과 배열에 이미 존재하는지 여부를 결정.
         //  이 값이 `true`일 경우, 아이템은 결과 배열에 추가되고, `false`일 경우 추가되지 않음
-        let appendIfUnique: (T) -> Void = { item in
+        let appendIfUnique: (SearchEntry) -> Void = { entry in
             let isUnique: Bool
             if let customIsEqual = self.isEqual {
-                isUnique = !results.contains { otherItem in
-                    self.keySelector(otherItem) == self.keySelector(item) && customIsEqual(otherItem, item)
+                isUnique = !results.contains { otherEntry in
+                    otherEntry.key == entry.key && customIsEqual(otherEntry.item, entry.item)
                 }
             } else {
-                isUnique = !results.contains(where: { self.keySelector($0) == self.keySelector(item) })
+                isUnique = !results.contains(where: { $0.key == entry.key })
             }
             if isUnique {
-                results.append(item)
+                results.append(entry)
             }
         }
         
@@ -260,10 +357,10 @@ extension HangulSearch {
         fullMatchResults.forEach(appendIfUnique)
         // 2. 초성 입력인 경우 초성 검색 결과를 결과 배열에 추가
         if isPureChosung(input: input) {
-            searchByChosung(input: input).forEach(appendIfUnique)
+            searchByChosung(input: input, entries: context.chosung).forEach(appendIfUnique)
         }
         // 3. 자동 완성 검색 결과를 결과 배열에 추가
-        searchByAutocomplete(input: input).forEach(appendIfUnique)
+        searchByAutocomplete(input: input, entries: context.decomposed).forEach(appendIfUnique)
         return results
     }
     
@@ -315,36 +412,55 @@ extension HangulSearch {
         return (unicode >= startUnicode) && (unicode <= endUnicode)
     }
     
+    private func sortEntries(_ entries: [SearchEntry], by sortMode: SortMode, input: String) -> [SearchEntry] {
+        switch sortMode {
+        case .hangulOrder:
+            return sortEntriesByHangulOrder(entries: entries)
+        case .hangulOrderReversed:
+            return sortEntriesByHangulOrderReversed(entries: entries)
+        case .editDistance:
+            return sortEntriesByEditDistance(to: input, entries: entries)
+        case .matchPosition:
+            return sortEntriesByMatchPosition(input: input, entries: entries)
+        case .none:
+            return entries
+        }
+    }
+    
     /// 항목들을 한글 자모 순서대로 정렬
-    /// - Parameter items: 정렬할 항목 배열
+    /// - Parameter entries: 정렬할 항목 배열
     /// - Returns: 정렬된 항목 배열
-    private func sortItemsByHangulOrder(items: [T]) -> [T] {
-        return items.sorted { keySelector($0).localizedCaseInsensitiveCompare(keySelector($1)) == .orderedAscending }
+    private func sortEntriesByHangulOrder(entries: [SearchEntry]) -> [SearchEntry] {
+        return entries.sorted {
+            $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending
+        }
     }
     
     /// 항목들을 한글 자모 역순으로 정렬
-    /// - Parameter items: 정렬할 항목 배열
+    /// - Parameter entries: 정렬할 항목 배열
     /// - Returns: 정렬된 항목 배열
-    private func sortItemsByHangulOrderReversed(items: [T]) -> [T] {
-        return items.sorted { keySelector($0).localizedCaseInsensitiveCompare(keySelector($1)) == .orderedDescending }
+    private func sortEntriesByHangulOrderReversed(entries: [SearchEntry]) -> [SearchEntry] {
+        return entries.sorted {
+            $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedDescending
+        }
     }
     
     /// 검색 입력에 대해 편집 거리를 기반으로 항목을 정렬
     /// - Parameters:
     ///   - target: 검색어
-    ///   - items: 정렬할 항목 배열
+    ///   - entries: 정렬할 항목 배열
     /// - Returns: 정렬된 항목 배열
-    private func sortItemsByEditDistance(to target: String, items: [T]) -> [T] {
-        let scoredItems = items.enumerated().map { index, item in
-            (index: index, item: item, distance: levenshteinDistance(from: keySelector(item), to: target))
+    private func sortEntriesByEditDistance(to target: String, entries: [SearchEntry]) -> [SearchEntry] {
+        let scoredEntries = entries.enumerated().map { index, entry in
+            (index: index, entry: entry, distance: levenshteinDistance(from: entry.key, to: target))
         }
         
-        return scoredItems.sorted { lhs, rhs in
+        return scoredEntries.sorted { lhs, rhs in
             if lhs.distance == rhs.distance {
                 return lhs.index < rhs.index
             }
             return lhs.distance < rhs.distance
-        }.map { $0.item }
+        }.map { $0.entry }
     }
     
     /// 레벤슈타인 편집 거리 계산 함수
@@ -389,14 +505,42 @@ extension HangulSearch {
     /// 입력 문자열과 일치하는 위치를 기준으로 항목을 정렬
     /// - Parameters:
     ///   - input: 검색어
-    ///   - items: 정렬할 항목 배열
+    ///   - entries: 정렬할 항목 배열
     /// - Returns: 일치하는 위치를 기준으로 정렬된 항목 배열
-    private func sortItemsByMatchPosition(input: String, items: [T]) -> [T] {
-        return items.sorted {
-            let indexA = keySelector($0).range(of: input, options: .caseInsensitive)?.lowerBound.utf16Offset(in: keySelector($0)) ?? Int.max
-            let indexB = keySelector($1).range(of: input, options: .caseInsensitive)?.lowerBound.utf16Offset(in: keySelector($1)) ?? Int.max
-            return indexA < indexB
+    private func sortEntriesByMatchPosition(input: String, entries: [SearchEntry]) -> [SearchEntry] {
+        let scoredEntries = entries.enumerated().map { index, entry in
+            let matchIndex = entry.key.range(of: input, options: .caseInsensitive)?.lowerBound.utf16Offset(in: entry.key) ?? Int.max
+            return (index: index, entry: entry, matchIndex: matchIndex)
         }
+        
+        return scoredEntries.sorted { lhs, rhs in
+            if lhs.matchIndex == rhs.matchIndex {
+                return lhs.index < rhs.index
+            }
+            return lhs.matchIndex < rhs.matchIndex
+        }.map { $0.entry }
+    }
+    
+    private func applyPagination(to entries: [SearchEntry], offset: Int, limit: Int?) -> [SearchEntry] {
+        let safeOffset = max(0, offset)
+        
+        guard safeOffset < entries.count else {
+            return []
+        }
+        
+        let sliced = entries[safeOffset...]
+        
+        guard let limit else {
+            return Array(sliced)
+        }
+        
+        let safeLimit = max(0, limit)
+        
+        guard safeLimit > 0 else {
+            return []
+        }
+        
+        return Array(sliced.prefix(safeLimit))
     }
     
 }
