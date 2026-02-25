@@ -1,5 +1,5 @@
 import XCTest
-@testable import HangulSearch
+import HangulSearch
 
 final class HangulSearchPublicTypesTests: XCTestCase {
     func testHangulSearchOptionsDefaultsMatchLegacyFriendlyValues() {
