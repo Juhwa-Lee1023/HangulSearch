@@ -45,7 +45,7 @@ let hits = engine.searchHits(input: query, options: options)
 
 No breaking API change is planned.
 
-This line focuses on performance and operational hardening:
+This release line focuses on performance and operational hardening:
 
 - internal dedup optimization for combined mode
 - memory optimization for edit-distance calculation

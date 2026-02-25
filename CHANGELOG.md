@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project follows Semantic Versi
 
 ## [Unreleased]
 
+Note: The latest released version is `1.0.1` (2026-02-24). Entries in this
+section are pending and may be grouped into the next `1.1.x` / `1.2.x` release
+line at release time.
+
 ### Added
 - CI gate now includes `swift test --parallel`, `swift test -c release`,
   `swift test --sanitize=thread`, and a benchmark smoke test.

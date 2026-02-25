@@ -11,6 +11,10 @@ Security fixes are provided based on the following policy:
 | 1.0.x | Critical fixes only |
 | < 1.0.0 | Not supported |
 
+Note: At the time of writing, the latest released version is `1.0.1` (see
+`CHANGELOG.md`). The `1.1.x` and `1.2.x` rows are a forward-looking support
+policy for upcoming releases.
+
 ## Reporting a vulnerability
 
 Please do not open a public GitHub issue for security vulnerabilities.
